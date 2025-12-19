@@ -1,4 +1,4 @@
-import { Box, Text, useApp, useInput } from 'ink';
+import { Box, Text, useApp } from 'ink';
 import { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/layout/Header.js';
 import { Footer } from './components/layout/Footer.js';
@@ -23,6 +23,7 @@ export function App() {
   const { exit } = useApp();
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [inputValue, setInputValue] = useState('');
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [portfolio, setPortfolio] = useState<Portfolio>({
     holdings: [],
@@ -65,23 +66,13 @@ export function App() {
     init();
   }, []);
 
-  // Handle keyboard shortcuts
-  useInput((input, key) => {
-    if (key.ctrl && input === 'c') {
-      exit();
-    }
-    if (key.escape) {
-      setAssistantMessage('');
-      setCurrentView('dashboard');
-    }
-  });
-
   // Handle user input
   const handleSubmit = useCallback(
     async (input: string) => {
       if (isProcessing) return;
 
       setIsProcessing(true);
+      setInputValue('');
       setAssistantMessage('');
       setHint('');
 
@@ -135,7 +126,7 @@ export function App() {
 
   return (
     <Container>
-      <Header title="DevFolio" status="ESC to reset · Ctrl+C to exit" />
+      <Header title="DevFolio" status="Ctrl+C to exit" />
 
       <Box flexDirection="column" flexGrow={1}>
         <Dashboard
@@ -166,6 +157,8 @@ export function App() {
       </Box>
 
       <Footer
+        value={inputValue}
+        onChange={setInputValue}
         onSubmit={handleSubmit}
         isLoading={isProcessing}
         placeholder="Ask anything..."
