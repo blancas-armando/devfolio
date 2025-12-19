@@ -11,7 +11,10 @@
     "dev": "tsx watch src/index.tsx",
     "build": "tsup",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "finance",
@@ -32,6 +35,8 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "asciichart": "^1.5.25",
     "better-sqlite3": "^11.6.0",
     "commander": "^12.1.0",
     "dotenv": "^16.4.7",
@@ -39,15 +44,21 @@
     "ink": "^5.1.0",
     "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",
+    "jsdom": "^27.3.0",
     "react": "^18.3.1",
-    "yahoo-finance2": "^2.13.2"
+    "yahoo-finance2": "^3.10.2"
   },
   "devDependencies": {
+    "@testing-library/react-hooks": "^8.0.1",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/jsdom": "^27.0.0",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.14",
+    "ink-testing-library": "^4.0.0",
+    "react-test-renderer": "^19.2.3",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.16"
   }
 }

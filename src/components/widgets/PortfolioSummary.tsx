@@ -1,20 +1,44 @@
 import { Box, Text } from 'ink';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import type { Portfolio } from '../../types/index.js';
 import { colors } from '../../utils/colors.js';
 import { formatCurrency, formatPercent, padRight } from '../../utils/format.js';
 import { PriceChange } from './PriceChange.js';
 import { ProgressBar } from './ProgressBar.js';
+import { PROGRESS_BAR_WIDTH } from '../../constants/index.js';
 
 interface PortfolioSummaryProps {
   portfolio: Portfolio;
   isLoading?: boolean;
 }
 
+interface Allocation {
+  symbol: string;
+  value: number;
+  percent: number;
+  gain: number;
+}
+
 export const PortfolioSummary = memo(function PortfolioSummary({
   portfolio,
   isLoading = false,
 }: PortfolioSummaryProps) {
+  // Memoize allocation calculations to prevent recalculation on every render
+  const allocations = useMemo((): Allocation[] => {
+    if (portfolio.holdings.length === 0 || portfolio.totalValue === 0) {
+      return [];
+    }
+
+    return portfolio.holdings
+      .map((h) => ({
+        symbol: h.symbol,
+        value: h.value || 0,
+        percent: ((h.value || 0) / portfolio.totalValue) * 100,
+        gain: h.gainPercent || 0,
+      }))
+      .sort((a, b) => b.value - a.value); // Sort without mutating - returns new array
+  }, [portfolio.holdings, portfolio.totalValue]);
+
   if (isLoading) {
     return (
       <Box flexDirection="column">
@@ -23,7 +47,7 @@ export const PortfolioSummary = memo(function PortfolioSummary({
     );
   }
 
-  if (portfolio.holdings.length === 0) {
+  if (allocations.length === 0) {
     return (
       <Box flexDirection="column">
         <Text color={colors.textSecondary}>
@@ -32,17 +56,6 @@ export const PortfolioSummary = memo(function PortfolioSummary({
       </Box>
     );
   }
-
-  // Calculate allocation percentages
-  const allocations = portfolio.holdings.map((h) => ({
-    symbol: h.symbol,
-    value: h.value || 0,
-    percent: ((h.value || 0) / portfolio.totalValue) * 100,
-    gain: h.gainPercent || 0,
-  }));
-
-  // Sort by value descending
-  allocations.sort((a, b) => b.value - a.value);
 
   return (
     <Box flexDirection="column">
@@ -64,7 +77,7 @@ export const PortfolioSummary = memo(function PortfolioSummary({
         <Box key={alloc.symbol} marginBottom={0}>
           <ProgressBar
             percent={alloc.percent}
-            width={20}
+            width={PROGRESS_BAR_WIDTH}
             color={alloc.gain >= 0 ? colors.success : colors.danger}
             showPercent={false}
           />

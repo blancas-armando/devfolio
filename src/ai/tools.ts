@@ -118,6 +118,63 @@ export const tools = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'lookup_etf',
+      description: 'Look up an ETF fund to see its holdings, sector allocation, performance, and expense ratio. Use this for ETF tickers like VTI, SPY, QQQ, VOO, etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          symbol: {
+            type: 'string',
+            description: 'ETF ticker symbol (e.g., "VTI", "SPY", "QQQ")',
+          },
+        },
+        required: ['symbol'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'compare_etfs',
+      description: 'Compare two or three ETFs side by side - expense ratios, performance, holdings, and risk metrics',
+      parameters: {
+        type: 'object',
+        properties: {
+          symbols: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'ETF ticker symbols to compare (2-3 symbols, e.g., ["VTI", "SPY"])',
+            minItems: 2,
+            maxItems: 3,
+          },
+        },
+        required: ['symbols'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'compare_stocks',
+      description: 'Compare two to four stocks side by side - valuation ratios (P/E, P/S, PEG), growth metrics, profitability margins, financial health, and analyst ratings. Use this when the user wants to decide between multiple stock options.',
+      parameters: {
+        type: 'object',
+        properties: {
+          symbols: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Stock ticker symbols to compare (2-4 symbols, e.g., ["AAPL", "MSFT", "GOOGL", "NVDA"])',
+            minItems: 2,
+            maxItems: 4,
+          },
+        },
+        required: ['symbols'],
+      },
+    },
+  },
 ];
 
 export type ToolName =
@@ -127,4 +184,7 @@ export type ToolName =
   | 'lookup_stock'
   | 'add_holding'
   | 'show_portfolio'
-  | 'get_news';
+  | 'get_news'
+  | 'lookup_etf'
+  | 'compare_etfs'
+  | 'compare_stocks';

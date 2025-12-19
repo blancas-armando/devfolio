@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import { memo } from 'react';
 import { colors } from '../../utils/colors.js';
 
 interface HeaderProps {
@@ -6,7 +7,10 @@ interface HeaderProps {
   status?: string;
 }
 
-export function Header({ title = 'DevFolio', status }: HeaderProps) {
+export const Header = memo(function Header({
+  title = 'DevFolio',
+  status,
+}: HeaderProps) {
   return (
     <Box
       borderStyle="single"
@@ -22,4 +26,4 @@ export function Header({ title = 'DevFolio', status }: HeaderProps) {
       {status && <Text color={colors.textSecondary}>{status}</Text>}
     </Box>
   );
-}
+});

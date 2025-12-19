@@ -1,5 +1,4 @@
-import { render } from 'ink';
-import { App } from './app.js';
+import { run } from './app.js';
 import { config } from 'dotenv';
 import { closeDb } from './db/index.js';
 
@@ -14,11 +13,19 @@ if (!process.env.GROQ_API_KEY) {
   process.exit(1);
 }
 
-// Render the app
-const { waitUntilExit } = render(<App />);
+// Handle cleanup
+process.on('exit', () => {
+  closeDb();
+});
 
-// Cleanup on exit
-waitUntilExit().then(() => {
+process.on('SIGINT', () => {
   closeDb();
   process.exit(0);
+});
+
+// Run the app
+run().catch((error) => {
+  console.error('Fatal error:', error);
+  closeDb();
+  process.exit(1);
 });

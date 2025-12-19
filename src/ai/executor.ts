@@ -2,7 +2,8 @@ import type { ToolName } from './tools.js';
 import type { ToolResult } from '../types/index.js';
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from '../db/watchlist.js';
 import { getPortfolio, addHolding } from '../db/portfolio.js';
-import { getQuote } from '../services/market.js';
+import { getQuote, compareStocks } from '../services/market.js';
+import { getETFProfile, compareETFs } from '../services/etf.js';
 
 export async function executeTool(
   name: ToolName,
@@ -77,6 +78,54 @@ export async function executeTool(
         name,
         result: { message: 'News feature coming soon' },
         display: 'news',
+      };
+    }
+
+    case 'lookup_etf': {
+      const symbol = (args.symbol as string).toUpperCase();
+      const etf = await getETFProfile(symbol);
+      if (!etf) {
+        return {
+          name,
+          result: { error: `Could not find ETF: ${symbol}` },
+        };
+      }
+      return {
+        name,
+        result: { symbol, etf },
+        display: 'etf',
+      };
+    }
+
+    case 'compare_etfs': {
+      const symbols = (args.symbols as string[]).map(s => s.toUpperCase());
+      const etfs = await compareETFs(symbols);
+      if (etfs.length === 0) {
+        return {
+          name,
+          result: { error: `Could not find any of the specified ETFs: ${symbols.join(', ')}` },
+        };
+      }
+      return {
+        name,
+        result: { symbols: etfs.map(e => e.symbol), etfs },
+        display: 'etf-compare',
+      };
+    }
+
+    case 'compare_stocks': {
+      const symbols = (args.symbols as string[]).map(s => s.toUpperCase());
+      const profiles = await compareStocks(symbols);
+      if (profiles.length === 0) {
+        return {
+          name,
+          result: { error: `Could not find any of the specified stocks: ${symbols.join(', ')}` },
+        };
+      }
+      return {
+        name,
+        result: { symbols: profiles.map(p => p.symbol), profiles },
+        display: 'stock-compare',
       };
     }
 

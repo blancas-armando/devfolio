@@ -86,7 +86,69 @@ export interface ToolCall {
 export interface ToolResult {
   name: string;
   result: unknown;
-  display?: 'watchlist' | 'portfolio' | 'stock' | 'options' | 'earnings' | 'news' | 'dashboard';
+  display?: 'watchlist' | 'portfolio' | 'stock' | 'options' | 'earnings' | 'news' | 'dashboard' | 'etf' | 'etf-compare' | 'stock-compare';
 }
 
-export type ViewType = 'dashboard' | 'stock' | 'options' | 'earnings' | 'news';
+export type ViewType = 'dashboard' | 'stock' | 'options' | 'earnings' | 'news' | 'etf' | 'etf-compare' | 'stock-compare';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ETF Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ETFHolding {
+  symbol: string;
+  name: string;
+  weight: number; // percentage
+  // Performance metrics (fetched separately)
+  price?: number;
+  changePercent?: number; // daily change
+  threeMonthReturn?: number; // 3-month return
+  ytdReturn?: number; // year to date return
+}
+
+export interface ETFProfile {
+  // Identity
+  symbol: string;
+  name: string;
+  family: string | null;
+  category: string | null;
+  inceptionDate: Date | null;
+
+  // Data timestamp
+  asOfDate: Date;
+
+  // Price & Yield
+  price: number;
+  change: number;
+  changePercent: number;
+  yield: number | null;
+
+  // Costs & Size
+  expenseRatio: number | null;
+  totalAssets: number | null;
+
+  // Holdings
+  topHoldings: ETFHolding[];
+  holdingsCount: number | null;
+
+  // Allocation
+  stockPosition: number | null;
+  bondPosition: number | null;
+  cashPosition: number | null;
+
+  // Sector Weights
+  sectorWeights: Record<string, number>;
+
+  // Performance
+  ytdReturn: number | null;
+  oneYearReturn: number | null;
+  threeYearReturn: number | null;
+  fiveYearReturn: number | null;
+
+  // Risk (for comparisons)
+  beta: number | null;
+  sharpeRatio: number | null;
+
+  // Historical prices for charting
+  historicalPrices: number[];
+}

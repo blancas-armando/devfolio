@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { useEffect, useState, useCallback } from 'react';
+import { memo, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import type { Quote, Portfolio } from '../../types/index.js';
 import { getQuotes, getHistoricalDataBatch } from '../../services/market.js';
 import { colors } from '../../utils/colors.js';
@@ -7,6 +7,7 @@ import { formatRelativeTime } from '../../utils/format.js';
 import { Watchlist } from '../widgets/Watchlist.js';
 import { PortfolioSummary } from '../widgets/PortfolioSummary.js';
 import { Spinner } from '../widgets/Spinner.js';
+import { REFRESH_INTERVAL_MS, HISTORICAL_DAYS } from '../../constants/index.js';
 
 interface DashboardProps {
   watchlistSymbols: string[];
@@ -14,48 +15,64 @@ interface DashboardProps {
   onRefresh?: () => void;
 }
 
-export function Dashboard({
+export const Dashboard = memo(function Dashboard({
   watchlistSymbols,
   portfolio,
   onRefresh,
 }: DashboardProps) {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [historicalData, setHistoricalData] = useState<Map<string, number[]>>(
-    new Map()
+    () => new Map()
   );
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  // Create stable key for symbol changes - proper dependency pattern
+  const symbolsKey = useMemo(
+    () => watchlistSymbols.join(','),
+    [watchlistSymbols]
+  );
+
+  // Use ref to track symbols to avoid recreating fetchData on every render
+  const symbolsRef = useRef(watchlistSymbols);
+  symbolsRef.current = watchlistSymbols;
+
+  // Stable fetchData function that reads symbols from ref
   const fetchData = useCallback(async () => {
-    if (watchlistSymbols.length === 0) {
+    const symbols = symbolsRef.current;
+
+    if (symbols.length === 0) {
+      setQuotes([]);
+      setHistoricalData(new Map());
       setIsLoading(false);
       return;
     }
 
     try {
       const [quotesData, histData] = await Promise.all([
-        getQuotes(watchlistSymbols),
-        getHistoricalDataBatch(watchlistSymbols),
+        getQuotes(symbols),
+        getHistoricalDataBatch(symbols, HISTORICAL_DAYS),
       ]);
 
       setQuotes(quotesData);
       setHistoricalData(histData);
       setLastUpdated(new Date());
-    } catch (error) {
-      // Silently fail, keep existing data
+    } catch {
+      // Silently fail - errors shown in UI state
     } finally {
       setIsLoading(false);
     }
-  }, [watchlistSymbols]);
+  }, []); // Empty deps - uses ref for symbols
 
-  // Initial fetch
+  // Fetch when symbols change - uses memoized key for stable comparison
   useEffect(() => {
+    setIsLoading(true);
     fetchData();
-  }, [fetchData]);
+  }, [symbolsKey, fetchData]);
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh interval - separate from symbol changes
   useEffect(() => {
-    const interval = setInterval(fetchData, 30_000);
+    const interval = setInterval(fetchData, REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -101,4 +118,4 @@ export function Dashboard({
       </Box>
     </Box>
   );
-}
+});

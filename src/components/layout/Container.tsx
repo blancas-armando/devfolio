@@ -1,18 +1,15 @@
 import { Box } from 'ink';
-import { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
+import { MIN_CONTAINER_HEIGHT } from '../../constants/index.js';
 
 interface ContainerProps {
   children: ReactNode;
 }
 
-export function Container({ children }: ContainerProps) {
+export const Container = memo(function Container({ children }: ContainerProps) {
   return (
-    <Box
-      flexDirection="column"
-      width="100%"
-      minHeight={24}
-    >
+    <Box flexDirection="column" width="100%" minHeight={MIN_CONTAINER_HEIGHT}>
       {children}
     </Box>
   );
-}
+});

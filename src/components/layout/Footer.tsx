@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import { memo, useCallback } from 'react';
 import TextInput from 'ink-text-input';
 import { colors } from '../../utils/colors.js';
 
@@ -10,18 +11,21 @@ interface FooterProps {
   placeholder?: string;
 }
 
-export function Footer({
+export const Footer = memo(function Footer({
   value,
   onChange,
   onSubmit,
   isLoading = false,
   placeholder = 'Ask anything...',
 }: FooterProps) {
-  const handleSubmit = (input: string) => {
-    if (input.trim() && !isLoading) {
-      onSubmit(input.trim());
-    }
-  };
+  const handleSubmit = useCallback(
+    (input: string) => {
+      if (input.trim() && !isLoading) {
+        onSubmit(input.trim());
+      }
+    },
+    [onSubmit, isLoading]
+  );
 
   return (
     <Box
@@ -41,4 +45,4 @@ export function Footer({
       />
     </Box>
   );
-}
+});
