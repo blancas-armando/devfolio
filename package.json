@@ -7,6 +7,9 @@
     "devfolio": "./dist/index.js"
   },
   "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.tsx",
     "build": "tsup",
