@@ -4,7 +4,7 @@
   "description": "AI-powered finance TUI for developers who invest",
   "type": "module",
   "bin": {
-    "devfolio": "./dist/index.js"
+    "devfolio": "dist/index.js"
   },
   "main": "./dist/index.js",
   "files": [
@@ -32,7 +32,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/blancas-armando/devfolio.git"
+    "url": "git+https://github.com/blancas-armando/devfolio.git"
   },
   "engines": {
     "node": ">=20.0.0"
