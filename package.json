@@ -1,0 +1,53 @@
+{
+  "name": "devfolio",
+  "version": "0.1.0",
+  "description": "AI-powered finance TUI for developers who invest",
+  "type": "module",
+  "bin": {
+    "devfolio": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.tsx",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "finance",
+    "tui",
+    "terminal",
+    "stocks",
+    "portfolio",
+    "ai",
+    "cli"
+  ],
+  "author": "Armando Blancas",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blancas-armando/devfolio.git"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.6.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.7",
+    "groq-sdk": "^0.8.0",
+    "ink": "^5.1.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^18.3.1",
+    "yahoo-finance2": "^2.13.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.14",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
