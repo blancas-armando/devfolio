@@ -68,6 +68,9 @@ export interface CompanyProfile {
   netIncome: number | null;
   eps: number | null;
   epsGrowth: number | null;
+  freeCashFlow: number | null;
+  operatingCashFlow: number | null;
+  capitalExpenditures: number | null;
 
   // Balance Sheet
   totalCash: number | null;
@@ -214,6 +217,12 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
       netIncome: stats?.netIncomeToCommon ?? null,
       eps: stats?.trailingEps ?? null,
       epsGrowth: stats?.earningsQuarterlyGrowth ?? null,
+      freeCashFlow: financial?.freeCashflow ?? null,
+      operatingCashFlow: financial?.operatingCashflow ?? null,
+      // CAPEX derived as OCF - FCF (represented as negative, so we negate)
+      capitalExpenditures: financial?.operatingCashflow && financial?.freeCashflow
+        ? financial.operatingCashflow - financial.freeCashflow
+        : null,
 
       // Balance Sheet
       totalCash: financial?.totalCash ?? null,

@@ -81,13 +81,18 @@ export function displayCompanyProfile(profile: CompanyProfile, quickTake?: Quick
   ], width);
 
   // Valuation Section
+  const evFcf = profile.enterpriseValue && profile.freeCashFlow && profile.freeCashFlow > 0
+    ? profile.enterpriseValue / profile.freeCashFlow
+    : null;
   drawSection('Valuation', [
     ['P/E Ratio', formatRatio(profile.peRatio)],
     ['Forward P/E', formatRatio(profile.forwardPE)],
     ['PEG Ratio', formatRatio(profile.pegRatio)],
     ['P/S Ratio', formatRatio(profile.priceToSales)],
     ['P/B Ratio', formatRatio(profile.priceToBook)],
+    ['EV/Revenue', formatRatio(profile.evToRevenue)],
     ['EV/EBITDA', formatRatio(profile.evToEbitda)],
+    ['EV/FCF', formatRatio(evFcf)],
   ], width);
 
   // Financials Section
@@ -98,6 +103,9 @@ export function displayCompanyProfile(profile: CompanyProfile, quickTake?: Quick
     ['Operating Margin', formatPercentValue(profile.operatingMargin)],
     ['Profit Margin', formatPercentValue(profile.profitMargin)],
     ['EBITDA', formatLargeNumber(profile.ebitda)],
+    ['Operating CF', formatLargeNumber(profile.operatingCashFlow)],
+    ['CapEx', formatLargeNumber(profile.capitalExpenditures)],
+    ['Free Cash Flow', formatLargeNumber(profile.freeCashFlow)],
   ], width);
 
   // Balance Sheet Section
@@ -395,6 +403,22 @@ export function displayStockComparison(profiles: CompanyProfile[]): void {
   const pbRow = formatRow('P/B Ratio', profiles.map(p => fmtRatioVal(p.priceToBook)), profiles.map(p => p.priceToBook), false);
   console.log(chalk.cyan('│') + ' ' + pbRow + ' '.repeat(Math.max(0, innerWidth - stripAnsi(pbRow).length)) + ' ' + chalk.cyan('│'));
 
+  const evRevRow = formatRow('EV/Revenue', profiles.map(p => fmtRatioVal(p.evToRevenue)), profiles.map(p => p.evToRevenue), false);
+  console.log(chalk.cyan('│') + ' ' + evRevRow + ' '.repeat(Math.max(0, innerWidth - stripAnsi(evRevRow).length)) + ' ' + chalk.cyan('│'));
+
+  const evEbitdaRow = formatRow('EV/EBITDA', profiles.map(p => fmtRatioVal(p.evToEbitda)), profiles.map(p => p.evToEbitda), false);
+  console.log(chalk.cyan('│') + ' ' + evEbitdaRow + ' '.repeat(Math.max(0, innerWidth - stripAnsi(evEbitdaRow).length)) + ' ' + chalk.cyan('│'));
+
+  // Calculate EV/FCF for each profile
+  const evFcfValues = profiles.map(p => {
+    if (p.enterpriseValue && p.freeCashFlow && p.freeCashFlow > 0) {
+      return p.enterpriseValue / p.freeCashFlow;
+    }
+    return null;
+  });
+  const evFcfRow = formatRow('EV/FCF', evFcfValues.map(v => fmtRatioVal(v)), evFcfValues, false);
+  console.log(chalk.cyan('│') + ' ' + evFcfRow + ' '.repeat(Math.max(0, innerWidth - stripAnsi(evFcfRow).length)) + ' ' + chalk.cyan('│'));
+
   // Section: Growth
   console.log(chalk.cyan('├─') + chalk.cyan(' Growth ') + chalk.cyan('─'.repeat(Math.max(0, width - 12))) + chalk.cyan('┤'));
 
@@ -430,6 +454,16 @@ export function displayStockComparison(profiles: CompanyProfile[]): void {
 
   const debtRow = simpleRow('Debt', profiles.map(p => fmtLarge(p.totalDebt)));
   console.log(chalk.cyan('│') + ' ' + debtRow + ' '.repeat(Math.max(0, innerWidth - stripAnsi(debtRow).length)) + ' ' + chalk.cyan('│'));
+
+  const ocfRow = formatRow('Operating CF', profiles.map(p => fmtLarge(p.operatingCashFlow)), profiles.map(p => p.operatingCashFlow), true);
+  console.log(chalk.cyan('│') + ' ' + ocfRow + ' '.repeat(Math.max(0, innerWidth - stripAnsi(ocfRow).length)) + ' ' + chalk.cyan('│'));
+
+  // For CapEx, lower is generally better (less capital intensive)
+  const capexRow = formatRow('CapEx', profiles.map(p => fmtLarge(p.capitalExpenditures)), profiles.map(p => p.capitalExpenditures), false);
+  console.log(chalk.cyan('│') + ' ' + capexRow + ' '.repeat(Math.max(0, innerWidth - stripAnsi(capexRow).length)) + ' ' + chalk.cyan('│'));
+
+  const fcfRow = formatRow('Free Cash Flow', profiles.map(p => fmtLarge(p.freeCashFlow)), profiles.map(p => p.freeCashFlow), true);
+  console.log(chalk.cyan('│') + ' ' + fcfRow + ' '.repeat(Math.max(0, innerWidth - stripAnsi(fcfRow).length)) + ' ' + chalk.cyan('│'));
 
   // Section: Analyst View (if any have analyst data)
   const hasAnalyst = profiles.some(p => p.targetPrice && p.numberOfAnalysts);
