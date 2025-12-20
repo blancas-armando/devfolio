@@ -67,7 +67,10 @@ function renderRow(
 ): string {
   const indentStr = ' '.repeat(indent);
   const labelText = isTotal ? chalk.bold(label) : label;
-  const paddedLabel = (indentStr + labelText).padEnd(labelWidth);
+  // Calculate visible length and pad manually (padEnd counts ANSI codes)
+  const visibleLabelLen = indent + label.length;
+  const labelPadding = ' '.repeat(Math.max(0, labelWidth - visibleLabelLen));
+  const paddedLabel = indentStr + labelText + labelPadding;
 
   const formattedValues = values.map(v => {
     const formatted = formatMoney(v, showSign);
