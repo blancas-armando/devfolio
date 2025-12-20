@@ -149,8 +149,9 @@ export function showHelp(): void {
   // Tips
   console.log('');
   console.log(chalk.bold.cyan('  Tips'));
+  console.log(chalk.dim('  - Press Tab for command/symbol completion'));
+  console.log(chalk.dim('  - Press Ctrl+C to cancel long operations'));
   console.log(chalk.dim('  - Use natural language: "tell me about Apple"'));
-  console.log(chalk.dim('  - AI commands (b, r, e) provide deeper analysis'));
-  console.log(chalk.dim('  - Watchlist shows upcoming earnings & dividends'));
+  console.log(chalk.dim('  - AI commands (b, r, e, why) provide deeper analysis'));
   console.log('');
 }

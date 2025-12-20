@@ -1,6 +1,6 @@
 /**
  * CLI Main Entry Point
- * REPL loop and command routing
+ * REPL loop and command routing with tab completion and Ctrl+C cancellation
  */
 
 import * as readline from 'readline';
@@ -40,6 +40,71 @@ import {
 } from './commands.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Tab Completion
+// ═══════════════════════════════════════════════════════════════════════════
+
+const COMMANDS = [
+  'brief', 'b',
+  'watchlist', 'w',
+  'portfolio', 'p',
+  'news',
+  'read',
+  'help', 'h',
+  'clear', 'home',
+  'quit', 'q', 'exit',
+  'add',
+  'rm', 'remove',
+  'filings', 'filing', 'sec',
+  's', 'stock',
+  'r', 'report', 'research',
+  'e', 'earnings',
+  'why',
+  'etf',
+  'compare', 'cs',
+];
+
+// Common stock symbols for completion
+const POPULAR_SYMBOLS = [
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA',
+  'JPM', 'V', 'JNJ', 'WMT', 'PG', 'UNH', 'HD', 'MA',
+  'SPY', 'QQQ', 'VTI', 'VOO', 'IWM', 'VGT', 'VUG',
+];
+
+function completer(line: string): [string[], string] {
+  const trimmed = line.trim().toLowerCase();
+
+  // If empty or just starting, suggest commands
+  if (!trimmed) {
+    return [COMMANDS.slice(0, 10), line];
+  }
+
+  // If starts with a command that takes symbols, suggest symbols
+  const symbolCommands = ['s ', 'stock ', 'r ', 'report ', 'e ', 'earnings ', 'why ', 'etf ', 'filings ', 'sec ', 'add ', 'news '];
+  for (const cmd of symbolCommands) {
+    if (trimmed.startsWith(cmd)) {
+      const partial = trimmed.slice(cmd.length).toUpperCase();
+      const matches = POPULAR_SYMBOLS.filter(s => s.startsWith(partial));
+      return [matches.map(s => cmd.trim() + ' ' + s), line];
+    }
+  }
+
+  // Compare commands - suggest symbols after first
+  if (trimmed.startsWith('compare ') || trimmed.startsWith('cs ')) {
+    const parts = trimmed.split(/\s+/);
+    if (parts.length >= 2) {
+      const partial = (parts[parts.length - 1] || '').toUpperCase();
+      const matches = POPULAR_SYMBOLS.filter(s => s.startsWith(partial));
+      const prefix = parts.slice(0, -1).join(' ') + ' ';
+      return [matches.map(s => prefix + s), line];
+    }
+  }
+
+  // Otherwise, complete commands
+  const matches = COMMANDS.filter(c => c.startsWith(trimmed));
+  return [matches, line];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Data Initialization
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -54,6 +119,29 @@ function seedDemoData(): void {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Cancellation Support
+// ═══════════════════════════════════════════════════════════════════════════
+
+let currentAbortController: AbortController | null = null;
+let currentStopSpinner: (() => void) | null = null;
+
+function cancelCurrentOperation(): boolean {
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+    if (currentStopSpinner) {
+      currentStopSpinner();
+      currentStopSpinner = null;
+    }
+    console.log('');
+    console.log(chalk.yellow('  Operation cancelled'));
+    console.log('');
+    return true;
+  }
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Main Application
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -64,16 +152,33 @@ export async function run(): Promise<void> {
   // Show home screen
   showHomeScreen();
 
-  // Create readline interface
+  // Create readline interface with tab completion
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     terminal: true,
+    completer,
   });
 
   // Track chat history for context
   const chatHistory: Message[] = [];
   let isProcessing = false;
+
+  // Handle Ctrl+C during operations
+  process.on('SIGINT', () => {
+    if (isProcessing && cancelCurrentOperation()) {
+      isProcessing = false;
+      // Re-prompt after cancellation
+      setImmediate(() => prompt());
+    } else {
+      // Not processing, exit gracefully
+      console.log('');
+      console.log(chalk.dim('  Goodbye.'));
+      console.log('');
+      rl.close();
+      process.exit(0);
+    }
+  });
 
   // Prompt function
   const prompt = (): void => {
@@ -86,12 +191,13 @@ export async function run(): Promise<void> {
       }
 
       if (isProcessing) {
-        console.log(chalk.dim('  Please wait...'));
+        console.log(chalk.dim('  Please wait... (Ctrl+C to cancel)'));
         prompt();
         return;
       }
 
       isProcessing = true;
+      currentAbortController = new AbortController();
 
       try {
         const cmd = trimmed.toLowerCase();
@@ -108,32 +214,32 @@ export async function run(): Promise<void> {
         } else if (cmd === 'clear' || cmd === 'home') {
           showHomeScreen();
         } else if (cmd === 'watchlist' || cmd === 'w' || cmd === 'cal' || cmd === 'calendar' || cmd === 'events') {
-          const stop = showSpinner('Fetching watchlist...');
+          currentStopSpinner = showSpinner('Fetching watchlist...');
           await showWatchlist();
-          stop();
+          currentStopSpinner();
         } else if (cmd === 'portfolio' || cmd === 'p') {
-          const stop = showSpinner('Loading portfolio...');
+          currentStopSpinner = showSpinner('Loading portfolio...');
           await showPortfolio();
-          stop();
+          currentStopSpinner();
         } else if (cmd === 'brief' || cmd === 'b' || cmd === 'market' || cmd === 'm') {
-          const stop = showSpinner('Generating market brief...');
+          currentStopSpinner = showSpinner('Generating market brief...');
           await showBrief();
-          stop();
+          currentStopSpinner();
         } else if (cmd === 'news' || cmd.startsWith('news ')) {
           const newsMatch = trimmed.match(/^news\s+(.+)$/i);
           const newsSymbols = newsMatch
             ? newsMatch[1].split(/[\s,]+/).map(s => s.toUpperCase())
             : undefined;
-          const stop = showSpinner('Fetching news...');
+          currentStopSpinner = showSpinner('Fetching news...');
           await showNews(newsSymbols);
-          stop();
+          currentStopSpinner();
         } else if (cmd.startsWith('read ')) {
           const readMatch = trimmed.match(/^read\s+(\d+)$/i);
           if (readMatch) {
             const articleNum = parseInt(readMatch[1], 10);
-            const stop = showSpinner('Fetching article...');
+            currentStopSpinner = showSpinner('Fetching article...');
             await readArticle(articleNum);
-            stop();
+            currentStopSpinner();
           } else {
             console.log('');
             console.log(chalk.red('  Usage: read <number> (e.g., read 1)'));
@@ -143,9 +249,9 @@ export async function run(): Promise<void> {
           const filingsMatch = trimmed.match(/^(?:filings|sec)\s+([A-Za-z]{1,5})$/i);
           if (filingsMatch) {
             const symbol = filingsMatch[1].toUpperCase();
-            const stop = showSpinner(`Fetching SEC filings for ${symbol}...`);
+            currentStopSpinner = showSpinner(`Fetching SEC filings for ${symbol}...`);
             await showFilings(symbol);
-            stop();
+            currentStopSpinner();
           } else {
             console.log('');
             console.log(chalk.red('  Usage: filings <symbol> (e.g., filings AAPL)'));
@@ -155,9 +261,9 @@ export async function run(): Promise<void> {
           const filingMatch = trimmed.match(/^filing\s+(\d+)$/i);
           if (filingMatch) {
             const filingNum = parseInt(filingMatch[1], 10);
-            const stop = showSpinner('Fetching filing...');
+            currentStopSpinner = showSpinner('Fetching filing...');
             await showFilingContent(filingNum);
-            stop();
+            currentStopSpinner();
           } else {
             console.log('');
             console.log(chalk.red('  Usage: filing <number> (e.g., filing 1)'));
@@ -171,51 +277,51 @@ export async function run(): Promise<void> {
           // Check for why command first (before stock command)
           const whySymbol = parseWhyCommand(trimmed);
           if (whySymbol) {
-            const stop = showSpinner(`Analyzing why ${whySymbol} is moving...`);
+            currentStopSpinner = showSpinner(`Analyzing why ${whySymbol} is moving...`);
             await showWhy(whySymbol);
-            stop();
+            currentStopSpinner();
           } else {
           // Check parsed commands
           const reportTicker = parseReportCommand(trimmed);
           if (reportTicker) {
-            const stop = showSpinner(`Generating ${reportTicker} research report...`);
+            currentStopSpinner = showSpinner(`Generating ${reportTicker} research report...`);
             await showReport(reportTicker);
-            stop();
+            currentStopSpinner();
           } else {
             const earningsTicker = parseEarningsCommand(trimmed);
             if (earningsTicker) {
-              const stop = showSpinner(`Generating ${earningsTicker} earnings report (SEC + Yahoo)...`);
+              currentStopSpinner = showSpinner(`Generating ${earningsTicker} earnings report (SEC + Yahoo)...`);
               await showEarnings(earningsTicker);
-              stop();
+              currentStopSpinner();
             } else {
               const etfTicker = parseETFCommand(trimmed);
               if (etfTicker) {
-                const stop = showSpinner(`Fetching ${etfTicker} ETF profile...`);
+                currentStopSpinner = showSpinner(`Fetching ${etfTicker} ETF profile...`);
                 await showETF(etfTicker);
-                stop();
+                currentStopSpinner();
               } else {
                 const compareSymbols = parseCompareCommand(trimmed);
                 if (compareSymbols) {
-                  const stop = showSpinner(`Comparing ETFs ${compareSymbols.join(', ')}...`);
+                  currentStopSpinner = showSpinner(`Comparing ETFs ${compareSymbols.join(', ')}...`);
                   await showETFComparison(compareSymbols);
-                  stop();
+                  currentStopSpinner();
                 } else {
                   const stockCompareSymbols = parseStockCompareCommand(trimmed);
                   if (stockCompareSymbols) {
-                    const stop = showSpinner(`Comparing stocks ${stockCompareSymbols.join(', ')}...`);
+                    currentStopSpinner = showSpinner(`Comparing stocks ${stockCompareSymbols.join(', ')}...`);
                     await showStockComparison(stockCompareSymbols);
-                    stop();
+                    currentStopSpinner();
                   } else {
                     const ticker = parseStockCommand(trimmed);
                     if (ticker) {
-                      const stop = showSpinner(`Fetching ${ticker} profile...`);
+                      currentStopSpinner = showSpinner(`Fetching ${ticker} profile...`);
                       await showStock(ticker);
-                      stop();
+                      currentStopSpinner();
                     } else {
                       // Send to AI with streaming
                       console.log('');
                       process.stdout.write(chalk.dim('  '));
-                      let stopSpinner = showSpinner('Thinking...');
+                      currentStopSpinner = showSpinner('Thinking...');
                       let firstToken = true;
 
                       const response = await streamChat(
@@ -223,7 +329,7 @@ export async function run(): Promise<void> {
                         chatHistory,
                         (token: string) => {
                           if (firstToken) {
-                            stopSpinner();
+                            if (currentStopSpinner) currentStopSpinner();
                             process.stdout.write('\r\x1b[K'); // Clear spinner line
                             process.stdout.write(chalk.cyan('  '));
                             firstToken = false;
@@ -232,7 +338,7 @@ export async function run(): Promise<void> {
                           process.stdout.write(token);
                         }
                       );
-                      if (firstToken) stopSpinner(); // In case no tokens came through
+                      if (firstToken && currentStopSpinner) currentStopSpinner();
                       console.log('');
 
                       // Add to history
@@ -278,18 +384,25 @@ export async function run(): Promise<void> {
         }
         }
       } catch (error) {
-        const msg = error instanceof Error ? error.message : 'Something went wrong';
-        console.log('');
-        console.log(chalk.red(`  Error: ${msg}`));
-        console.log('');
+        // Check if it's an abort error
+        if (error instanceof Error && error.name === 'AbortError') {
+          // Already handled by SIGINT handler
+        } else {
+          const msg = error instanceof Error ? error.message : 'Something went wrong';
+          console.log('');
+          console.log(chalk.red(`  Error: ${msg}`));
+          console.log('');
+        }
       } finally {
         isProcessing = false;
+        currentAbortController = null;
+        currentStopSpinner = null;
         prompt();
       }
     });
   };
 
-  // Handle Ctrl+C gracefully
+  // Handle readline close
   rl.on('close', () => {
     console.log('');
     process.exit(0);
