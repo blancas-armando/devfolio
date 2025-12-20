@@ -29,3 +29,9 @@ export { showHomeScreen, showHelp } from './screens.js';
 
 // Why displays
 export { displayWhyExplanation } from './why.js';
+
+// Pulse displays
+export { displayMarketPulse, displayPulseConfig } from './pulse.js';
+
+// Screener displays
+export { displayScreenerResults, displayScreenerPresets, formatRelatedStocksSection } from './screener.js';

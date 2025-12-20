@@ -21,7 +21,7 @@ export const LOGO = `
 `;
 
 export const TAGLINE = 'AI-Powered Portfolio Intelligence';
-export const VERSION = 'v0.1.0';
+export const VERSION = 'v0.2.0';
 
 // Display widths
 export const WIDTH = {

@@ -86,7 +86,7 @@ export interface ToolCall {
 export interface ToolResult {
   name: string;
   result: unknown;
-  display?: 'watchlist' | 'portfolio' | 'stock' | 'options' | 'earnings' | 'news' | 'dashboard' | 'etf' | 'etf-compare' | 'stock-compare';
+  display?: 'watchlist' | 'portfolio' | 'stock' | 'options' | 'earnings' | 'news' | 'dashboard' | 'etf' | 'etf-compare' | 'stock-compare' | 'filings';
 }
 
 export type ViewType = 'dashboard' | 'stock' | 'options' | 'earnings' | 'news' | 'etf' | 'etf-compare' | 'stock-compare';

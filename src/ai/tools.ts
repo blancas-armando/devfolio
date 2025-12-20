@@ -175,6 +175,23 @@ export const tools = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'get_filings',
+      description: 'Get recent SEC filings (10-K, 10-Q, 8-K) for a stock. Use this when the user asks about SEC filings, annual reports, quarterly reports, or regulatory filings.',
+      parameters: {
+        type: 'object',
+        properties: {
+          symbol: {
+            type: 'string',
+            description: 'Stock ticker symbol (e.g., "AAPL")',
+          },
+        },
+        required: ['symbol'],
+      },
+    },
+  },
 ];
 
 export type ToolName =
@@ -187,4 +204,5 @@ export type ToolName =
   | 'get_news'
   | 'lookup_etf'
   | 'compare_etfs'
-  | 'compare_stocks';
+  | 'compare_stocks'
+  | 'get_filings';

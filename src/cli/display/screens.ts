@@ -81,6 +81,8 @@ export function showHelp(): void {
   console.log(chalk.cyan('│') + ' ' + chalk.bold.yellow('MARKET') + ' '.repeat(innerWidth - 6) + ' ' + chalk.cyan('│'));
   const marketCmds = [
     `  ${chalk.yellow('b')}, ${chalk.yellow('brief')}          ${chalk.dim('AI market analysis')}`,
+    `  ${chalk.yellow('pulse')}             ${chalk.dim('Market alerts & AI take')}`,
+    `  ${chalk.yellow('screen')} ${chalk.dim('<preset>')}   ${chalk.dim('Stock screener (gainers, value...)')}`,
     `  ${chalk.yellow('news')} ${chalk.dim('[SYM]')}        ${chalk.dim('Market or stock news')}`,
     `  ${chalk.yellow('read <N>')}          ${chalk.dim('Read article N')}`,
   ];

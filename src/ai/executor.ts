@@ -4,6 +4,7 @@ import { getWatchlist, addToWatchlist, removeFromWatchlist } from '../db/watchli
 import { getPortfolio, addHolding } from '../db/portfolio.js';
 import { getQuote, compareStocks } from '../services/market.js';
 import { getETFProfile, compareETFs } from '../services/etf.js';
+import { getRecentFilings } from '../services/sec.js';
 
 export async function executeTool(
   name: ToolName,
@@ -126,6 +127,22 @@ export async function executeTool(
         name,
         result: { symbols: profiles.map(p => p.symbol), profiles },
         display: 'stock-compare',
+      };
+    }
+
+    case 'get_filings': {
+      const symbol = (args.symbol as string).toUpperCase();
+      const filings = await getRecentFilings(symbol, ['10-K', '10-Q', '8-K'], 15);
+      if (!filings || filings.length === 0) {
+        return {
+          name,
+          result: { error: `No SEC filings found for ${symbol}` },
+        };
+      }
+      return {
+        name,
+        result: { symbol, filings },
+        display: 'filings',
       };
     }
 

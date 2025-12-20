@@ -43,6 +43,8 @@ src/
 │       ├── filings.ts    # SEC filings display
 │       ├── news.ts       # News feed, article display
 │       ├── portfolio.ts  # Watchlist, portfolio displays
+│       ├── pulse.ts      # Market pulse display
+│       ├── screener.ts   # Stock screener display
 │       └── help.ts       # Help screen
 ├── ai/
 │   ├── agent.ts          # Groq LLM integration for chat
@@ -53,11 +55,14 @@ src/
 │   ├── market.ts         # Yahoo Finance: quotes, profiles
 │   ├── etf.ts            # ETF profiles and holdings
 │   ├── brief.ts          # AI market brief
+│   ├── pulse.ts          # Market pulse alerts + AI take
+│   ├── screener.ts       # Stock screener + related stocks
 │   ├── research.ts       # AI research reports
 │   ├── earnings.ts       # Earnings + SEC data
 │   └── sec.ts            # SEC EDGAR API
 ├── db/
 │   ├── index.ts          # Database initialization
+│   ├── config.ts         # User preferences (pulse thresholds)
 │   ├── watchlist.ts      # Watchlist operations
 │   └── portfolio.ts      # Portfolio operations
 ├── types/
@@ -84,7 +89,10 @@ src/
 | Command | Description |
 |---------|-------------|
 | `b`, `brief` | AI market analysis with indices, sectors, outlook |
-| `s <SYM>` | Stock profile with chart and AI quick take |
+| `pulse` | Market alerts with personalized thresholds + AI take |
+| `pulse config` | View/edit pulse alert thresholds |
+| `screen <preset>` | Stock screener (gainers, losers, tech, healthcare, finance...) |
+| `s <SYM>` | Stock profile with chart, AI quick take, + related stocks |
 | `r <SYM>` | AI research report |
 | `e <SYM>` | Earnings report with SEC data |
 | `why <SYM>` | AI explanation of stock movement |

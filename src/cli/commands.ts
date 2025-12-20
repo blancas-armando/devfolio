@@ -12,7 +12,10 @@ import { getETFProfile, compareETFs } from '../services/etf.js';
 import { getRecentFilings } from '../services/sec.js';
 import { getQuickTake } from '../services/quicktake.js';
 import { explainMovement } from '../services/why.js';
+import { getMarketPulse } from '../services/pulse.js';
+import { runScreener, getAvailablePresets, getRelatedStocks, type ScreenerPreset } from '../services/screener.js';
 import { addToWatchlist, removeFromWatchlist } from '../db/watchlist.js';
+import { getPulseConfig, updatePulseConfig, type PulseConfig } from '../db/config.js';
 import {
   displayCompanyProfile,
   displayStockComparison,
@@ -27,6 +30,10 @@ import {
   displayFilings,
   displayFiling,
   displayWhyExplanation,
+  displayMarketPulse,
+  displayPulseConfig,
+  displayScreenerResults,
+  displayScreenerPresets,
   showWatchlist,
   showPortfolio,
   showHomeScreen,
@@ -108,10 +115,13 @@ export async function showStock(symbol: string): Promise<void> {
     return;
   }
 
-  // Fetch AI quick take in background (don't block display)
-  const quickTake = await getQuickTake(profile);
+  // Fetch AI quick take and related stocks in parallel
+  const [quickTake, relatedStocks] = await Promise.all([
+    getQuickTake(profile),
+    getRelatedStocks(upperSymbol),
+  ]);
 
-  displayCompanyProfile(profile, quickTake);
+  displayCompanyProfile(profile, quickTake, relatedStocks);
 }
 
 export async function showStockComparison(symbols: string[]): Promise<void> {
@@ -342,6 +352,131 @@ export function handleRemoveFromWatchlist(input: string): void {
     console.log(chalk.yellow(`  ${symbols.join(', ')} not found in watchlist`));
   }
   console.log('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Pulse Commands
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function showPulse(): Promise<void> {
+  const pulse = await getMarketPulse();
+  displayMarketPulse(pulse);
+}
+
+export function showPulseConfig(): void {
+  const config = getPulseConfig();
+  displayPulseConfig(config);
+}
+
+export function handlePulseSet(input: string): void {
+  const setMatch = input.match(/^pulse\s+set\s+(\w+)\s+(.+)$/i);
+  if (!setMatch) {
+    console.log('');
+    console.log(chalk.red('  Usage: pulse set <key> <value>'));
+    console.log(chalk.dim('  Examples:'));
+    console.log(chalk.dim('    pulse set vixThreshold 25'));
+    console.log(chalk.dim('    pulse set moverThreshold 8'));
+    console.log(chalk.dim('    pulse set showSectors false'));
+    console.log('');
+    return;
+  }
+
+  const key = setMatch[1] as keyof PulseConfig;
+  const valueStr = setMatch[2];
+
+  // Valid keys
+  const validKeys: (keyof PulseConfig)[] = [
+    'indexDropThreshold',
+    'indexRiseThreshold',
+    'vixThreshold',
+    'moverThreshold',
+    'showSectors',
+    'showIndicators',
+    'topMoversCount',
+  ];
+
+  if (!validKeys.includes(key)) {
+    console.log('');
+    console.log(chalk.red(`  Unknown setting: ${key}`));
+    console.log(chalk.dim(`  Valid settings: ${validKeys.join(', ')}`));
+    console.log('');
+    return;
+  }
+
+  // Parse value based on key type
+  let value: number | boolean;
+
+  if (key === 'showSectors' || key === 'showIndicators') {
+    // Boolean values
+    if (valueStr.toLowerCase() === 'true' || valueStr === '1' || valueStr.toLowerCase() === 'yes') {
+      value = true;
+    } else if (valueStr.toLowerCase() === 'false' || valueStr === '0' || valueStr.toLowerCase() === 'no') {
+      value = false;
+    } else {
+      console.log('');
+      console.log(chalk.red(`  Invalid value for ${key}. Use true/false.`));
+      console.log('');
+      return;
+    }
+  } else {
+    // Numeric values
+    value = parseFloat(valueStr);
+    if (isNaN(value) || value < 0) {
+      console.log('');
+      console.log(chalk.red(`  Invalid value for ${key}. Use a positive number.`));
+      console.log('');
+      return;
+    }
+  }
+
+  const updates = { [key]: value } as Partial<PulseConfig>;
+  const newConfig = updatePulseConfig(updates);
+
+  console.log('');
+  console.log(chalk.green(`  Updated ${key} to ${value}`));
+  console.log(chalk.dim('  Run "pulse config" to see all settings.'));
+  console.log('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Screener Commands
+// ═══════════════════════════════════════════════════════════════════════════
+
+const VALID_PRESETS: ScreenerPreset[] = [
+  'gainers', 'losers', 'active', 'trending', 'value', 'growth', 'dividend',
+  'tech', 'healthcare', 'finance', 'energy', 'consumer', 'industrial',
+];
+
+export function parseScreenCommand(input: string): ScreenerPreset | 'help' | null {
+  const match = input.match(/^screen(?:\s+(\w+))?$/i);
+  if (!match) return null;
+
+  const preset = match[1]?.toLowerCase();
+  if (!preset) return 'help';
+
+  if (VALID_PRESETS.includes(preset as ScreenerPreset)) {
+    return preset as ScreenerPreset;
+  }
+
+  return null;
+}
+
+export async function showScreener(preset: ScreenerPreset): Promise<void> {
+  const results = await runScreener(preset);
+
+  if (!results) {
+    console.log('');
+    console.log(chalk.red(`  Error: Could not run screener "${preset}"`));
+    console.log('');
+    return;
+  }
+
+  displayScreenerResults(results);
+}
+
+export function showScreenerHelp(): void {
+  const presets = getAvailablePresets();
+  displayScreenerPresets(presets);
 }
 
 // Re-export display functions that can be used directly

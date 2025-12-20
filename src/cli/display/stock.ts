@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import asciichart from 'asciichart';
 import type { CompanyProfile } from '../../services/market.js';
 import type { QuickTake } from '../../services/quicktake.js';
+import type { RelatedStock } from '../../services/screener.js';
 import { formatCurrency, formatPercent } from '../../utils/format.js';
 import {
   stripAnsi,
@@ -22,7 +23,7 @@ import {
 // Company Profile Display
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function displayCompanyProfile(profile: CompanyProfile, quickTake?: QuickTake | null): void {
+export function displayCompanyProfile(profile: CompanyProfile, quickTake?: QuickTake | null, relatedStocks?: RelatedStock[]): void {
   const width = 60;
   const innerWidth = width - 4;
 
@@ -223,6 +224,29 @@ export function displayCompanyProfile(profile: CompanyProfile, quickTake?: Quick
     const footerStripped = stripAnsi(chartFooter);
     const footerPadding = Math.max(0, innerWidth - footerStripped.length);
     console.log(chalk.dim('│') + ' ' + chartFooter + ' '.repeat(footerPadding) + ' ' + chalk.dim('│'));
+  }
+
+  // Related Stocks Section
+  if (relatedStocks && relatedStocks.length > 0) {
+    console.log(chalk.dim('├' + '─'.repeat(width - 2) + '┤'));
+    console.log(chalk.dim('│') + ' ' + chalk.bold.cyan('Related Stocks'.padEnd(innerWidth)) + ' ' + chalk.dim('│'));
+    console.log(chalk.dim('├' + '─'.repeat(width - 2) + '┤'));
+
+    for (const stock of relatedStocks.slice(0, 4)) {
+      const changeColor = stock.changePercent >= 0 ? chalk.green : chalk.red;
+      const arrow = stock.changePercent >= 0 ? '▲' : '▼';
+
+      const symbol = chalk.white(stock.symbol.padEnd(6));
+      const name = chalk.dim(stock.name.substring(0, 18).padEnd(18));
+      const price = chalk.white(`$${stock.price.toFixed(2)}`.padStart(9));
+      const change = changeColor(`${arrow}${Math.abs(stock.changePercent).toFixed(1)}%`.padStart(7));
+      const mcap = formatLargeNumber(stock.marketCap || 0).padStart(7);
+
+      const line = `${symbol} ${name} ${price} ${change} ${chalk.dim(mcap)}`;
+      const lineStripped = stripAnsi(line);
+      const linePadding = Math.max(0, innerWidth - lineStripped.length);
+      console.log(chalk.dim('│') + ' ' + line + ' '.repeat(linePadding) + ' ' + chalk.dim('│'));
+    }
   }
 
   // As of date footer

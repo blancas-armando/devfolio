@@ -19,6 +19,7 @@ import {
   parseCompareCommand,
   parseStockCompareCommand,
   parseWhyCommand,
+  parseScreenCommand,
   showStock,
   showStockComparison,
   showBrief,
@@ -30,6 +31,11 @@ import {
   showFilings,
   showFilingContent,
   showWhy,
+  showPulse,
+  showPulseConfig,
+  handlePulseSet,
+  showScreener,
+  showScreenerHelp,
   readArticle,
   handleAddToWatchlist,
   handleRemoveFromWatchlist,
@@ -45,6 +51,8 @@ import {
 
 const COMMANDS = [
   'brief', 'b',
+  'pulse',
+  'screen',
   'watchlist', 'w',
   'portfolio', 'p',
   'news',
@@ -61,6 +69,12 @@ const COMMANDS = [
   'why',
   'etf',
   'compare', 'cs',
+];
+
+// Screener presets for tab completion
+const SCREEN_PRESETS = [
+  'gainers', 'losers', 'active', 'trending', 'value', 'growth', 'dividend',
+  'tech', 'healthcare', 'finance', 'energy', 'consumer', 'industrial',
 ];
 
 // Common stock symbols for completion
@@ -97,6 +111,13 @@ function completer(line: string): [string[], string] {
       const prefix = parts.slice(0, -1).join(' ') + ' ';
       return [matches.map(s => prefix + s), line];
     }
+  }
+
+  // Screen command - suggest presets
+  if (trimmed.startsWith('screen ')) {
+    const partial = trimmed.slice(7).toLowerCase();
+    const matches = SCREEN_PRESETS.filter(p => p.startsWith(partial));
+    return [matches.map(p => 'screen ' + p), line];
   }
 
   // Otherwise, complete commands
@@ -225,6 +246,27 @@ export async function run(): Promise<void> {
           currentStopSpinner = showSpinner('Generating market brief...');
           await showBrief();
           currentStopSpinner();
+        } else if (cmd === 'pulse') {
+          currentStopSpinner = showSpinner('Checking market pulse...');
+          await showPulse();
+          currentStopSpinner();
+        } else if (cmd === 'pulse config') {
+          showPulseConfig();
+        } else if (cmd.startsWith('pulse set ')) {
+          handlePulseSet(trimmed);
+        } else if (cmd === 'screen' || cmd.startsWith('screen ')) {
+          const screenPreset = parseScreenCommand(trimmed);
+          if (screenPreset === 'help') {
+            showScreenerHelp();
+          } else if (screenPreset) {
+            currentStopSpinner = showSpinner(`Running ${screenPreset} screener...`);
+            await showScreener(screenPreset);
+            currentStopSpinner();
+          } else {
+            console.log('');
+            console.log(chalk.red('  Unknown screener preset.'));
+            showScreenerHelp();
+          }
         } else if (cmd === 'news' || cmd.startsWith('news ')) {
           const newsMatch = trimmed.match(/^news\s+(.+)$/i);
           const newsSymbols = newsMatch
