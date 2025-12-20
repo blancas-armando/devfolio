@@ -320,7 +320,12 @@ export function displayStockComparison(profiles: CompanyProfile[]): void {
   // Helper for simple row (no ranking)
   const simpleRow = (label: string, values: string[]): string => {
     const labelStr = chalk.dim(label.padEnd(labelWidth));
-    const valStrs = values.map(v => v.padStart(colWidth));
+    // Pad based on visible length (accounting for ANSI codes)
+    const valStrs = values.map(v => {
+      const visibleLen = stripAnsi(v).length;
+      const padding = Math.max(0, colWidth - visibleLen);
+      return ' '.repeat(padding) + v;
+    });
     return labelStr + valStrs.join('');
   };
 
