@@ -23,6 +23,7 @@ AI-powered financial terminal for developers who invest. Track stocks, analyze m
 
 - **AI Market Brief** — Get daily market analysis with indices, sectors, and outlook
 - **Stock Profiles** — Company data, charts, metrics, and AI quick takes
+- **Financial Statements** — Income statements, balance sheets, and cash flow statements
 - **Research Reports** — AI-generated stock research primers
 - **SEC Filings** — Read 10-K, 10-Q, and 8-K filings directly in your terminal
 - **Earnings Analysis** — Historical earnings with SEC data integration
@@ -75,6 +76,10 @@ npx devfolio
 | Command | Description |
 |---------|-------------|
 | `s <SYM> [TF]` | Stock profile with chart (e.g., `s AAPL 1y`) |
+| `fin <SYM>` | All financial statements (income, balance, cash flow) |
+| `fin <SYM> income` | Income statement only |
+| `fin <SYM> balance` | Balance sheet only |
+| `fin <SYM> cashflow` | Cash flow statement only |
 | `r <SYM>` | AI research primer report |
 | `e <SYM>` | Earnings report with SEC data |
 | `why <SYM>` | AI explanation of stock movement |
@@ -129,6 +134,12 @@ npx devfolio
 
 # Compare tech stocks
 > cs AAPL MSFT GOOGL AMZN
+
+# Financial statements
+> fin AAPL
+> fin AAPL income
+> fin AAPL balance
+> fin AAPL cashflow
 
 # Stock screener
 > screen gainers
