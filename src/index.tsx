@@ -1,4 +1,4 @@
-import { run } from './app.js';
+import { run } from './cli/index.js';
 import { config } from 'dotenv';
 import { closeDb } from './db/index.js';
 

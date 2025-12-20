@@ -4,144 +4,184 @@
 
 DevFolio is a terminal-based financial application that combines real-time market data with AI-powered analysis. It provides a comprehensive view of stocks, ETFs, market conditions, and news - all rendered in a beautiful ASCII-based terminal UI.
 
+## Development Practices
+
+### Trunk-Based Development
+This project follows trunk-based development:
+- **Small, frequent commits** - Each commit should be a single logical change
+- **Always deployable** - Main branch should always be in a working state
+- **No long-lived branches** - Feature work merged quickly
+- **Commit messages** - Use conventional format: `type: description`
+  - `feat:` - New features
+  - `fix:` - Bug fixes
+  - `refactor:` - Code restructuring
+  - `docs:` - Documentation
+  - `chore:` - Build, deps, config
+
+### Code Organization Principles
+- **Max 300 lines per file** - Split large files into focused modules
+- **Single responsibility** - Each file/function does one thing
+- **Explicit imports** - No barrel files that obscure dependencies
+- **Colocate related code** - Keep display logic near its data types
+
 ## Architecture
 
 ```
 src/
-├── index.tsx          # Entry point
-├── app.tsx            # Main application logic, CLI commands, display functions
+├── index.ts              # Entry point, process handling
+├── cli/
+│   ├── index.ts          # Main REPL loop
+│   ├── commands.ts       # Command parsing and routing
+│   ├── state.ts          # Shared state (lastNews, lastFilings)
+│   ├── ui.ts             # UI primitives (drawBox, spinner, etc.)
+│   └── display/
+│       ├── index.ts      # Display function exports
+│       ├── market.ts     # Brief, market overview displays
+│       ├── stock.ts      # Stock profile, comparison
+│       ├── etf.ts        # ETF displays
+│       ├── earnings.ts   # Earnings report display
+│       ├── filings.ts    # SEC filings display
+│       ├── news.ts       # News feed, article display
+│       ├── portfolio.ts  # Watchlist, portfolio displays
+│       └── help.ts       # Help screen
 ├── ai/
-│   ├── agent.ts       # Groq LLM integration for natural language chat
-│   ├── executor.ts    # Tool execution handler
-│   ├── tools.ts       # AI tool definitions (lookup_stock, compare_stocks, etc.)
-│   └── prompts.ts     # System prompts for AI
+│   ├── agent.ts          # Groq LLM integration for chat
+│   ├── executor.ts       # Tool execution handler
+│   ├── tools.ts          # AI tool definitions
+│   └── prompts.ts        # System prompts
 ├── services/
-│   ├── market.ts      # Yahoo Finance data: quotes, profiles, market overview
-│   ├── etf.ts         # ETF profiles and holdings
-│   ├── brief.ts       # AI-synthesized market brief
-│   ├── research.ts    # AI research report generation
-│   ├── earnings.ts    # Earnings reports with SEC data
-│   └── sec.ts         # SEC EDGAR API integration
+│   ├── market.ts         # Yahoo Finance: quotes, profiles
+│   ├── etf.ts            # ETF profiles and holdings
+│   ├── brief.ts          # AI market brief
+│   ├── research.ts       # AI research reports
+│   ├── earnings.ts       # Earnings + SEC data
+│   └── sec.ts            # SEC EDGAR API
 ├── db/
-│   ├── watchlist.ts   # SQLite watchlist operations
-│   └── portfolio.ts   # SQLite portfolio operations
-├── components/        # React/Ink UI components (TUI rendering)
-├── hooks/             # React hooks for state management
-├── types/             # TypeScript interfaces
-├── constants/         # App constants and demo data
-└── utils/             # Formatting utilities
+│   ├── index.ts          # Database initialization
+│   ├── watchlist.ts      # Watchlist operations
+│   └── portfolio.ts      # Portfolio operations
+├── types/
+│   └── index.ts          # Shared TypeScript interfaces
+├── utils/
+│   └── format.ts         # Formatting utilities
+└── constants/
+    └── index.ts          # App constants, demo data
 ```
 
 ## Key Technologies
 
 - **Runtime**: Node.js 20+
 - **Language**: TypeScript 5.7
-- **UI Framework**: React via Ink (terminal UI)
-- **Data Source**: yahoo-finance2 package
+- **UI**: chalk + readline (terminal colors and input)
+- **Data Source**: yahoo-finance2
 - **AI/LLM**: Groq API with Llama 3.3 70B
 - **Database**: SQLite 3 via better-sqlite3
 - **Build Tool**: tsup
 - **Testing**: Vitest
 
-## Data Flow
-
-1. **User Input** -> CLI command parser in `app.tsx`
-2. **Data Fetching** -> Services (`market.ts`, `etf.ts`, etc.) call Yahoo Finance
-3. **AI Processing** -> For `brief`, `research`, chat: Groq API synthesizes data
-4. **Display** -> `display*()` functions render ASCII boxes to terminal
-
 ## CLI Commands
 
-| Command | Function | Description |
-|---------|----------|-------------|
-| `b`, `brief` | `showBrief()` | AI market brief with full analysis |
-| `m`, `market` | `showMarket()` | Market overview (indices, sectors, movers) |
-| `s <SYM>` | `showStock()` | Company profile with chart |
-| `etf <SYM>` | `showETF()` | ETF profile with holdings |
-| `compare <S1> <S2>` | `showETFComparison()` | Compare ETFs |
-| `cs <S1> <S2>...` | `showStockComparison()` | Compare stocks |
-| `r <SYM>` | `showReport()` | AI research report |
-| `e <SYM>` | `showEarnings()` | Earnings report |
-| `w`, `watchlist` | `showWatchlist()` | View watchlist |
-| `p`, `portfolio` | `showPortfolio()` | View portfolio |
-| `add <SYM>` | - | Add to watchlist |
-| `cal`, `events` | `showCalendar()` | Upcoming earnings/dividends |
-| `news [SYM]` | `showNews()` | Market or stock news |
-| `read <N>` | - | Read article N in terminal |
-| `clear`, `home` | `showHomeScreen()` | Clear and show home |
-| `?`, `help` | `showHelp()` | Show help |
-| Natural language | `chat()` | AI chat with tools |
+| Command | Description |
+|---------|-------------|
+| `b`, `brief` | AI market analysis with indices, sectors, outlook |
+| `s <SYM>` | Stock profile with chart and AI quick take |
+| `r <SYM>` | AI research report |
+| `e <SYM>` | Earnings report with SEC data |
+| `why <SYM>` | AI explanation of stock movement |
+| `etf <SYM>` | ETF profile with holdings |
+| `compare <S1> <S2>` | Compare ETFs |
+| `cs <S1> <S2>...` | Compare stocks |
+| `filings <SYM>` | List SEC filings (10-K, 10-Q, 8-K) |
+| `filing <N>` | Read SEC filing |
+| `news [SYM]` | Market or stock news with sentiment |
+| `read <N>` | Read article |
+| `w`, `watchlist` | View watchlist with events |
+| `p`, `portfolio` | View portfolio |
+| `add <SYM>` | Add to watchlist |
+| `rm <SYM>` | Remove from watchlist |
+| `clear`, `home` | Clear screen |
+| `?`, `help` | Show help |
+| `q`, `quit` | Exit |
 
 ## Services
 
 ### market.ts
-Primary data service. Key functions:
+Primary data service:
 - `getQuotes(symbols)` - Real-time quotes
 - `getCompanyProfile(symbol)` - Full company data with chart
 - `compareStocks(symbols)` - Fetch multiple profiles
-- `getMarketOverview()` - Indices, sectors, VIX, top movers
+- `getMarketOverview()` - Indices, sectors, VIX, movers
 - `getMarketBriefData()` - Comprehensive data for AI brief
 - `getEventsCalendar(symbols)` - Upcoming earnings/dividends
 - `getNewsFeed(symbols?)` - News articles
-- `fetchArticleContent(url)` - Extract article text via Readability
+- `fetchArticleContent(url)` - Extract article text
 
-### etf.ts
-- `getETFProfile(symbol)` - Holdings, sectors, performance
-- `compareETFs(symbols)` - Compare multiple ETFs
+### AI Services
+- `brief.ts` - `getMarketBrief()` - Market data + AI narrative
+- `research.ts` - `generateResearchReport(symbol)` - Deep analysis
+- `earnings.ts` - `generateEarningsReport(symbol)` - Earnings + SEC
 
-### brief.ts
-- `getMarketBrief()` - Combines market data with AI narrative
-
-### research.ts
-- `generateResearchReport(symbol)` - AI-generated stock analysis
-
-### earnings.ts
-- `generateEarningsReport(symbol)` - Earnings with SEC filings
+### sec.ts
+SEC EDGAR integration:
+- `getRecentFilings(symbol)` - List 10-K, 10-Q, 8-K filings
+- `getFilingText(filing)` - Extract filing content
+- `extractKeySections(text)` - Pull key sections
+- `identify8KItems(text)` - Decode 8-K event types
 
 ## AI Integration
 
-### Tools (ai/tools.ts)
-AI can call these tools during chat:
-- `get_stock_quote` - Real-time price
-- `lookup_stock` - Company profile
-- `compare_stocks` - Multi-stock comparison
-- `lookup_etf` - ETF profile
-- `compare_etfs` - ETF comparison
-- `get_watchlist` - User's watchlist
-- `search_symbol` - Symbol lookup
+### Streaming Responses
+AI responses stream token-by-token for better UX:
+```typescript
+const stream = await groq.chat.completions.create({
+  stream: true,
+  // ...
+});
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content || '');
+}
+```
 
-### Prompts (ai/prompts.ts)
-System prompt configures AI as financial assistant with:
-- Market data interpretation
-- When to use which tools
-- Response formatting guidelines
+### Tool Calling
+AI can execute tools during chat:
+- `lookup_stock` - Get stock profile
+- `compare_stocks` - Compare multiple stocks
+- `lookup_etf` - ETF profile
+- `get_watchlist` - User's watchlist
+- `search_symbol` - Symbol search
 
 ## Display System
 
-All `display*()` functions in `app.tsx` render ASCII boxes:
-- Use `chalk` for colors
-- Box characters: `╭ ╮ ╰ ╯ │ ─ ├ ┤ ╞ ╡`
-- Color coding: green (positive), red (negative), yellow (warnings)
-- Width typically 70-78 characters
+### UI Primitives (cli/ui.ts)
+- `drawBox(title, lines, width)` - ASCII box with border
+- `showSpinner(message)` - Loading indicator
+- `streamText(text)` - Character-by-character output
+- Box characters: `╭ ╮ ╰ ╯ │ ─ ├ ┤`
+- Colors: green (positive), red (negative), yellow (warning), cyan (info)
 
-### Key Display Functions
-- `displayMarketBrief()` - Full market intelligence
-- `displayMarketOverview()` - Quick market snapshot
-- `displayCompanyProfile()` - Stock profile with chart
-- `displayETFProfile()` - ETF with holdings
-- `displayStockComparison()` - Side-by-side stocks
-- `displayNewsFeed()` - News list
-- `displayArticle()` - Full article content
+### Display Width
+Standard widths for consistency:
+- Full width: 78 characters
+- Standard box: 66-72 characters
+- Compact: 58 characters
 
 ## Database
 
-SQLite database at `~/.devfolio/data.db`:
+SQLite at `~/.devfolio/data.db`:
 
-**watchlist table**
-- symbol, added_at
+```sql
+CREATE TABLE watchlist (
+  symbol TEXT PRIMARY KEY,
+  added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 
-**portfolio table**
-- symbol, shares, avg_cost, added_at
+CREATE TABLE portfolio (
+  symbol TEXT PRIMARY KEY,
+  shares REAL,
+  avg_cost REAL,
+  added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
 
 ## Environment Variables
 
@@ -149,68 +189,67 @@ SQLite database at `~/.devfolio/data.db`:
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
-## Development Commands
+## Development
 
 ```bash
 npm install          # Install dependencies
-npm run build        # Build with tsup to dist/
-npm run dev          # Run the CLI app
-npm test             # Run Vitest tests
+npm run dev          # Run in development
+npm run build        # Build to dist/
+npm run typecheck    # Type check
+npm test             # Run tests
+npm test -- --watch  # Watch mode
 ```
 
-## Key Patterns
+## Adding Features
+
+1. **New Command**:
+   - Add handler in `cli/commands.ts`
+   - Create display function in `cli/display/`
+   - Update help in `cli/display/help.ts`
+
+2. **New AI Feature**:
+   - Add service function in `services/`
+   - Use streaming for responses
+   - Handle errors gracefully
+
+3. **New Data Source**:
+   - Create service in `services/`
+   - Add caching with TTL
+   - Export types from `types/`
+
+## Performance
 
 ### Caching
-Services use in-memory cache with TTL:
+Services cache with TTL:
 ```typescript
-const cache = new Map<string, { data: unknown; expires: number }>();
-function getCached<T>(key: string): T | null { ... }
-function setCache(key: string, data: unknown, ttlMs: number) { ... }
+const CACHE_TTL = {
+  quotes: 30_000,      // 30 seconds
+  profile: 300_000,    // 5 minutes
+  fundamentals: 3600_000, // 1 hour
+};
 ```
 
-### Error Handling
-Services return `null` on error, display functions handle gracefully:
+### Bundle Size
+Target: <150KB for dist/index.js
+- Tree-shake unused code
+- No unused dependencies
+- Lazy-load AI client
+
+## Error Handling
+
+Standard error display:
 ```typescript
-const profile = await getCompanyProfile(symbol);
-if (!profile) {
-  console.log(chalk.red('Could not fetch data'));
-  return;
+function displayError(message: string, hint?: string): void {
+  console.log('');
+  console.log(chalk.red(`  Error: ${message}`));
+  if (hint) console.log(chalk.dim(`  ${hint}`));
+  console.log('');
 }
 ```
 
-### Yahoo Finance Modules
-Common quoteSummary modules:
-- `price` - Current price data
-- `summaryDetail` - Key stats
-- `financialData` - Margins, growth
-- `defaultKeyStatistics` - P/E, beta
-- `topHoldings` - ETF holdings
-- `fundProfile` - ETF details
-- `calendarEvents` - Earnings dates
-
-## Adding New Features
-
-1. **New Data** - Add to `services/market.ts` or create new service
-2. **New Display** - Add `display*()` function in `app.tsx`
-3. **New Command** - Add handler and update help text in `app.tsx`
-4. **New AI Tool** - Add to `tools.ts` and `executor.ts`
-
-## Testing
-
-```bash
-npm test              # Run all tests
-npm test -- --watch   # Watch mode
-```
-
-Test files use `.test.ts` or `.test.tsx` suffix.
-
 ## Common Issues
 
-1. **Yahoo Finance Rate Limiting** - Add delays between requests, use caching
-2. **Header Overflow** - Yahoo sends large headers; use curl for article fetching
-3. **Missing API Key** - Ensure GROQ_API_KEY is set for AI features
-4. **Chart Rendering** - Uses `asciichart` package, needs numeric array data
-
-## File Size Reference
-
-After build, `dist/index.js` is typically 170-200KB.
+1. **Rate Limiting** - Yahoo Finance limits requests; use caching
+2. **API Key Missing** - GROQ_API_KEY required for AI features
+3. **Network Errors** - Services return null; display handles gracefully
+4. **Large Headers** - Use curl for article fetching (Node http parser limits)
