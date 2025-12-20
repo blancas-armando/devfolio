@@ -14,13 +14,24 @@ export function showHomeScreen(): void {
   console.clear();
   const width = getTerminalWidth();
 
-  // Logo with gradient effect
+  // Logo with grayscale gradient (works on light/dark themes)
   const logoLines = LOGO.trim().split('\n');
-  const gradient = [chalk.cyan, chalk.cyanBright, chalk.white, chalk.cyanBright, chalk.cyan, chalk.dim];
+  // Border lines (first, last) are dim, middle content has gradient
+  const gradient = [
+    chalk.gray,        // top border
+    chalk.white,       // D row
+    chalk.whiteBright, // E row
+    chalk.white,       // V row
+    chalk.gray,        // F row
+    chalk.whiteBright, // O row
+    chalk.white,       // L row
+    chalk.gray,        // I row
+    chalk.gray,        // bottom border
+  ];
 
   console.log('');
   logoLines.forEach((line, i) => {
-    const colorFn = gradient[i % gradient.length];
+    const colorFn = gradient[i] || chalk.gray;
     console.log(centerText(colorFn(line), width));
   });
 
