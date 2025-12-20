@@ -8,6 +8,7 @@ import YahooFinance from 'yahoo-finance2';
 // Initialize Yahoo Finance client
 const yahooFinance = new YahooFinance({
   suppressNotices: ['yahooSurvey'],
+  versionCheck: false,
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

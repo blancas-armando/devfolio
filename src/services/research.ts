@@ -5,6 +5,7 @@ import { getCompanyProfile, type CompanyProfile } from './market.js';
 // Initialize clients
 const yahooFinance = new YahooFinance({
   suppressNotices: ['yahooSurvey'],
+  versionCheck: false,
 });
 
 let _groq: Groq | null = null;

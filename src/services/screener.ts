@@ -4,6 +4,7 @@ import { CACHE_TTL } from '../constants/index.js';
 // Initialize Yahoo Finance client
 const yahooFinance = new YahooFinance({
   suppressNotices: ['yahooSurvey'],
+  versionCheck: false,
 });
 
 // Simple in-memory cache

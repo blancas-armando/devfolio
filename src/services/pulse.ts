@@ -4,7 +4,7 @@ import { getMarketOverview, getNewsFeed, getQuotes, type MarketOverview, type In
 import { getPulseConfig, type PulseConfig } from '../db/config.js';
 import { getWatchlist } from '../db/watchlist.js';
 
-const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'], versionCheck: false });
 
 // Lazy-load Groq client
 let _groq: Groq | null = null;

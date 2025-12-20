@@ -6,6 +6,7 @@ import { getQuotes, getPerformanceReturnsBatch, getHistoricalData } from './mark
 // Initialize Yahoo Finance client with notices suppressed
 const yahooFinance = new YahooFinance({
   suppressNotices: ['yahooSurvey'],
+  versionCheck: false,
 });
 
 // Simple in-memory cache

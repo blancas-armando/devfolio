@@ -8,6 +8,7 @@ import { CACHE_TTL, HISTORICAL_DAYS } from '../constants/index.js';
 // Initialize Yahoo Finance client with notices suppressed
 const yahooFinance = new YahooFinance({
   suppressNotices: ['yahooSurvey'],
+  versionCheck: false,
 });
 
 // Simple in-memory cache
