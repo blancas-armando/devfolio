@@ -156,27 +156,54 @@ async function getEarningsData(symbol: string): Promise<{
   nextEarningsDate: Date | null;
 }> {
   try {
-    const result = await yahooFinance.quoteSummary(symbol, {
-      modules: [
-        'earnings',
-        'earningsHistory',
-        'earningsTrend',
-        'calendarEvents',
-        'incomeStatementHistory',
-        'incomeStatementHistoryQuarterly',
-      ],
-    });
+    // Fetch quoteSummary for earnings estimates and fundamentalsTimeSeries for quarterly statements
+    const [quoteSummaryResult, timeSeriesResult] = await Promise.all([
+      yahooFinance.quoteSummary(symbol, {
+        modules: [
+          'earnings',
+          'earningsHistory',
+          'earningsTrend',
+          'calendarEvents',
+        ],
+      }),
+      // Use fundamentalsTimeSeries for quarterly income statements (quoteSummary deprecated since Nov 2024)
+      yahooFinance.fundamentalsTimeSeries(symbol, {
+        period1: new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000), // 2 years ago
+        type: 'quarterly',
+        module: 'all',
+      }),
+    ]);
 
-    // Parse quarterly income statements for detailed metrics
-    const quarterlyResults: QuarterlyResults[] = [];
-    const quarterlyStatements = result.incomeStatementHistoryQuarterly?.incomeStatementHistory ?? [];
+    const result = quoteSummaryResult;
     const earningsHistory = result.earningsHistory?.history ?? [];
 
-    for (let i = 0; i < Math.min(quarterlyStatements.length, 4); i++) {
-      const stmt = quarterlyStatements[i];
+    // Group time series results by date and filter for quarterly data
+    const dataByDate = new Map<string, Record<string, unknown>>();
+    for (const item of timeSeriesResult) {
+      const dateKey = item.date.toISOString().split('T')[0];
+      const existing = dataByDate.get(dateKey) || { date: item.date };
+      const itemData = item as unknown as Record<string, unknown>;
+      for (const [key, value] of Object.entries(itemData)) {
+        if (key !== 'date' && value !== null && value !== undefined) {
+          existing[key] = value;
+        }
+      }
+      dataByDate.set(dateKey, existing);
+    }
+
+    // Sort by date (most recent first) and take top 4 quarters
+    const sortedData = Array.from(dataByDate.values())
+      .sort((a, b) => new Date(b.date as Date).getTime() - new Date(a.date as Date).getTime())
+      .slice(0, 4);
+
+    // Parse quarterly income statements from fundamentalsTimeSeries
+    const quarterlyResults: QuarterlyResults[] = [];
+
+    for (let i = 0; i < sortedData.length; i++) {
+      const stmt = sortedData[i];
       const earnings = earningsHistory[i];
 
-      const endDate = stmt.endDate ? new Date(stmt.endDate) : new Date();
+      const endDate = stmt.date ? new Date(stmt.date as Date) : new Date();
       const revenue = typeof stmt.totalRevenue === 'number' ? stmt.totalRevenue : null;
       const operatingIncome = typeof stmt.operatingIncome === 'number' ? stmt.operatingIncome : null;
       const netIncome = typeof stmt.netIncome === 'number' ? stmt.netIncome : null;

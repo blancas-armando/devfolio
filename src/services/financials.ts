@@ -124,112 +124,134 @@ export async function getFinancialStatements(symbol: string): Promise<FinancialS
   if (cached) return cached;
 
   try {
-    const result = await yahooFinance.quoteSummary(symbol.toUpperCase(), {
-      modules: [
-        'price',
-        'incomeStatementHistory',
-        'balanceSheetHistory',
-        'cashflowStatementHistory',
-        'assetProfile',
-      ],
-    });
+    // Get basic info from quoteSummary (price and profile still work)
+    const [summaryResult, timeSeriesResult] = await Promise.all([
+      yahooFinance.quoteSummary(symbol.toUpperCase(), {
+        modules: ['price', 'assetProfile'],
+      }),
+      // Use fundamentalsTimeSeries for financial statements (quoteSummary deprecated since Nov 2024)
+      yahooFinance.fundamentalsTimeSeries(symbol.toUpperCase(), {
+        period1: new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000), // 5 years ago
+        type: 'annual',
+        module: 'all',
+      }),
+    ]);
 
-    const price = result.price;
-    const profile = result.assetProfile;
-    const incomeHistory = result.incomeStatementHistory?.incomeStatementHistory ?? [];
-    const balanceHistory = result.balanceSheetHistory?.balanceSheetStatements ?? [];
-    const cashFlowHistory = result.cashflowStatementHistory?.cashflowStatements ?? [];
+    const price = summaryResult.price;
+    const profile = summaryResult.assetProfile;
 
     if (!price) return null;
 
-    // Parse income statements (use any to access dynamic properties)
-    const incomeStatements: IncomeStatementRow[] = incomeHistory.map(stmt => {
-      const s = stmt as unknown as Record<string, unknown>;
+    // Group time series results by date
+    const dataByDate = new Map<string, Record<string, unknown>>();
+    for (const item of timeSeriesResult) {
+      const dateKey = item.date.toISOString().split('T')[0];
+      const existing = dataByDate.get(dateKey) || { date: item.date };
+      // Merge all fields from this item into the date entry
+      const itemData = item as unknown as Record<string, unknown>;
+      for (const [key, value] of Object.entries(itemData)) {
+        if (key !== 'date' && value !== null && value !== undefined) {
+          existing[key] = value;
+        }
+      }
+      dataByDate.set(dateKey, existing);
+    }
+
+    // Convert to sorted array (most recent first)
+    const sortedData = Array.from(dataByDate.values())
+      .sort((a, b) => new Date(b.date as Date).getTime() - new Date(a.date as Date).getTime());
+
+    // Parse income statements from fundamentalsTimeSeries data
+    const incomeStatements: IncomeStatementRow[] = sortedData.map(s => {
+      const grossProfit = getNum(s, 'grossProfit');
+      const operatingIncome = getNum(s, 'operatingIncome');
+      const operatingExpenses = (grossProfit !== null && operatingIncome !== null)
+        ? grossProfit - operatingIncome
+        : null;
+
       return {
-        endDate: new Date(stmt.endDate),
+        endDate: new Date(s.date as Date),
         totalRevenue: getNum(s, 'totalRevenue'),
         costOfRevenue: getNum(s, 'costOfRevenue'),
-        grossProfit: getNum(s, 'grossProfit'),
-        operatingExpenses: getNum(s, 'totalOperatingExpenses'),
-        operatingIncome: getNum(s, 'operatingIncome'),
+        grossProfit,
+        operatingExpenses,
+        operatingIncome,
         interestExpense: getNum(s, 'interestExpense'),
-        incomeBeforeTax: getNum(s, 'incomeBeforeTax'),
-        incomeTaxExpense: getNum(s, 'incomeTaxExpense'),
+        incomeBeforeTax: getNum(s, 'pretaxIncome'),
+        incomeTaxExpense: getNum(s, 'taxProvision'),
         netIncome: getNum(s, 'netIncome'),
-        ebitda: getNum(s, 'ebit'), // Use ebit as fallback
-        basicEPS: null,
-        dilutedEPS: null,
+        ebitda: getNum(s, 'EBITDA') ?? getNum(s, 'normalizedEBITDA'),
+        basicEPS: getNum(s, 'basicEPS'),
+        dilutedEPS: getNum(s, 'dilutedEPS'),
       };
     });
 
-    // Parse balance sheets
-    const balanceSheets: BalanceSheetRow[] = balanceHistory.map(stmt => {
-      const s = stmt as unknown as Record<string, unknown>;
+    // Parse balance sheets from fundamentalsTimeSeries data
+    const balanceSheets: BalanceSheetRow[] = sortedData.map(s => {
       const totalAssets = getNum(s, 'totalAssets');
-      const totalCurrentAssets = getNum(s, 'totalCurrentAssets');
-      const totalLiab = getNum(s, 'totalLiab');
-      const totalCurrentLiabilities = getNum(s, 'totalCurrentLiabilities');
+      const totalCurrentAssets = getNum(s, 'currentAssets');
+      const totalLiab = getNum(s, 'totalLiabilitiesNetMinorityInterest') ?? getNum(s, 'totalLiabilities');
+      const totalCurrentLiabilities = getNum(s, 'currentLiabilities');
 
       return {
-        endDate: new Date(stmt.endDate),
+        endDate: new Date(s.date as Date),
         // Assets
         totalAssets,
         totalCurrentAssets,
-        cash: getNum(s, 'cash'),
-        shortTermInvestments: getNum(s, 'shortTermInvestments'),
-        netReceivables: getNum(s, 'netReceivables'),
+        cash: getNum(s, 'cashAndCashEquivalents') ?? getNum(s, 'cashCashEquivalentsAndShortTermInvestments'),
+        shortTermInvestments: getNum(s, 'otherShortTermInvestments'),
+        netReceivables: getNum(s, 'receivables') ?? getNum(s, 'accountsReceivable'),
         inventory: getNum(s, 'inventory'),
         totalNonCurrentAssets: (totalAssets !== null && totalCurrentAssets !== null)
           ? totalAssets - totalCurrentAssets
           : null,
-        propertyPlantEquipment: getNum(s, 'propertyPlantEquipmentNet'),
-        goodwill: getNum(s, 'goodWill'),
-        intangibleAssets: getNum(s, 'intangibleAssets'),
+        propertyPlantEquipment: getNum(s, 'netPpe') ?? getNum(s, 'grossPpe'),
+        goodwill: getNum(s, 'goodwill'),
+        intangibleAssets: getNum(s, 'goodwillAndOtherIntangibleAssets'),
         // Liabilities
         totalLiabilities: totalLiab,
         totalCurrentLiabilities,
-        accountsPayable: getNum(s, 'accountsPayable'),
-        shortTermDebt: getNum(s, 'shortLongTermDebt'),
+        accountsPayable: getNum(s, 'accountsPayable') ?? getNum(s, 'payables'),
+        shortTermDebt: getNum(s, 'currentDebt') ?? getNum(s, 'currentDebtAndCapitalLeaseObligation'),
         totalNonCurrentLiabilities: (totalLiab !== null && totalCurrentLiabilities !== null)
           ? totalLiab - totalCurrentLiabilities
           : null,
-        longTermDebt: getNum(s, 'longTermDebt'),
+        longTermDebt: getNum(s, 'longTermDebt') ?? getNum(s, 'longTermDebtAndCapitalLeaseObligation'),
         // Equity
-        totalStockholderEquity: getNum(s, 'totalStockholderEquity'),
-        commonStock: getNum(s, 'commonStock'),
+        totalStockholderEquity: getNum(s, 'stockholdersEquity') ?? getNum(s, 'totalEquityGrossMinorityInterest'),
+        commonStock: getNum(s, 'commonStock') ?? getNum(s, 'commonStockEquity'),
         retainedEarnings: getNum(s, 'retainedEarnings'),
         treasuryStock: getNum(s, 'treasuryStock'),
       };
     });
 
-    // Parse cash flow statements
-    const cashFlows: CashFlowRow[] = cashFlowHistory.map(stmt => {
-      const s = stmt as unknown as Record<string, unknown>;
-      const opCashFlow = getNum(s, 'totalCashFromOperatingActivities');
-      const capex = getNum(s, 'capitalExpenditures');
-      const fcf = (opCashFlow !== null && capex !== null)
-        ? opCashFlow + capex // capex is negative
-        : null;
+    // Parse cash flow statements from fundamentalsTimeSeries data
+    const cashFlows: CashFlowRow[] = sortedData.map(s => {
+      const opCashFlow = getNum(s, 'operatingCashFlow');
+      const capex = getNum(s, 'capitalExpenditure');
+      const fcf = getNum(s, 'freeCashFlow') ?? (
+        (opCashFlow !== null && capex !== null) ? opCashFlow + capex : null
+      );
 
       return {
-        endDate: new Date(stmt.endDate),
+        endDate: new Date(s.date as Date),
         // Operating
         operatingCashFlow: opCashFlow,
-        netIncome: getNum(s, 'netIncome'),
-        depreciation: getNum(s, 'depreciation'),
-        changeInWorkingCapital: getNum(s, 'changeToNetincome'),
+        netIncome: getNum(s, 'netIncome') ?? getNum(s, 'netIncomeFromContinuingOperations'),
+        depreciation: getNum(s, 'depreciationAndAmortization'),
+        changeInWorkingCapital: getNum(s, 'changeInWorkingCapital'),
         // Investing
-        investingCashFlow: getNum(s, 'totalCashflowsFromInvestingActivities'),
+        investingCashFlow: getNum(s, 'investingCashFlow'),
         capitalExpenditures: capex,
-        acquisitions: getNum(s, 'acquisitions'),
+        acquisitions: getNum(s, 'netBusinessPurchaseAndSale'),
         // Financing
-        financingCashFlow: getNum(s, 'totalCashFromFinancingActivities'),
-        dividendsPaid: getNum(s, 'dividendsPaid'),
-        stockRepurchased: getNum(s, 'repurchaseOfStock'),
+        financingCashFlow: getNum(s, 'financingCashFlow'),
+        dividendsPaid: getNum(s, 'cashDividendsPaid') ?? getNum(s, 'commonStockDividendPaid'),
+        stockRepurchased: getNum(s, 'repurchaseOfCapitalStock'),
         debtRepayment: getNum(s, 'repaymentOfDebt'),
         // Summary
         freeCashFlow: fcf,
-        netChangeInCash: getNum(s, 'changeInCash'),
+        netChangeInCash: getNum(s, 'changesInCash') ?? getNum(s, 'endCashPosition'),
       };
     });
 
