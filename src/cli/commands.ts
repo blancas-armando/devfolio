@@ -14,6 +14,7 @@ import { getQuickTake } from '../services/quicktake.js';
 import { explainMovement } from '../services/why.js';
 import { getMarketPulse } from '../services/pulse.js';
 import { runScreener, getAvailablePresets, getRelatedStocks, type ScreenerPreset } from '../services/screener.js';
+import { getFinancialStatements } from '../services/financials.js';
 import { addToWatchlist, removeFromWatchlist } from '../db/watchlist.js';
 import { getPulseConfig, updatePulseConfig, type PulseConfig } from '../db/config.js';
 import { ErrorMessages } from '../utils/errors.js';
@@ -35,6 +36,7 @@ import {
   displayPulseConfig,
   displayScreenerResults,
   displayScreenerPresets,
+  displayFinancialStatements,
   showWatchlist,
   showPortfolio,
   showHomeScreen,
@@ -102,6 +104,25 @@ export function parseStockCompareCommand(input: string): string[] | null {
 export function parseWhyCommand(input: string): string | null {
   const whyMatch = input.match(/^why\s+([A-Za-z]{1,5})$/i);
   if (whyMatch) return whyMatch[1].toUpperCase();
+  return null;
+}
+
+export function parseFinancialsCommand(input: string): { symbol: string; type?: 'income' | 'balance' | 'cashflow' } | null {
+  // Match: fin AAPL, fin AAPL income, financials MSFT balance
+  const match = input.match(/^(?:fin|financials|statements)\s+([A-Za-z]{1,5})(?:\s+(income|balance|cashflow|cf|is|bs))?$/i);
+  if (match) {
+    const symbol = match[1].toUpperCase();
+    let type: 'income' | 'balance' | 'cashflow' | undefined;
+
+    if (match[2]) {
+      const typeStr = match[2].toLowerCase();
+      if (typeStr === 'income' || typeStr === 'is') type = 'income';
+      else if (typeStr === 'balance' || typeStr === 'bs') type = 'balance';
+      else if (typeStr === 'cashflow' || typeStr === 'cf') type = 'cashflow';
+    }
+
+    return { symbol, type };
+  }
   return null;
 }
 
@@ -306,6 +327,30 @@ export async function showWhy(symbol: string): Promise<void> {
   }
 
   displayWhyExplanation(explanation);
+}
+
+export async function showFinancials(
+  symbol: string,
+  statementType?: 'income' | 'balance' | 'cashflow'
+): Promise<void> {
+  const statements = await getFinancialStatements(symbol.toUpperCase());
+
+  if (!statements) {
+    displayActionableError({
+      message: `Could not fetch financial statements for "${symbol.toUpperCase()}"`,
+      suggestions: [
+        'Check the ticker symbol for typos',
+        'This may be a non-US stock or the data may be unavailable',
+      ],
+      tryCommands: [
+        `s ${symbol.toUpperCase()}`,
+        'fin AAPL',
+      ],
+    });
+    return;
+  }
+
+  displayFinancialStatements(statements, statementType ?? 'all');
 }
 
 export async function readArticle(articleNum: number): Promise<void> {

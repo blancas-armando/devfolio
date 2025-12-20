@@ -22,6 +22,7 @@ import {
   parseCompareCommand,
   parseStockCompareCommand,
   parseWhyCommand,
+  parseFinancialsCommand,
   parseScreenCommand,
   showStock,
   showStockComparison,
@@ -34,6 +35,7 @@ import {
   showFilings,
   showFilingContent,
   showWhy,
+  showFinancials,
   showPulse,
   showPulseConfig,
   handlePulseSet,
@@ -80,6 +82,7 @@ const COMMANDS = [
   's', 'stock',
   'r', 'report', 'research',
   'e', 'earnings',
+  'fin', 'financials', 'statements',
   'why',
   'etf',
   'compare', 'cs',
@@ -110,7 +113,7 @@ function completer(line: string): [string[], string] {
   }
 
   // If starts with a command that takes symbols, suggest symbols
-  const symbolCommands = ['s ', 'stock ', 'r ', 'report ', 'e ', 'earnings ', 'why ', 'etf ', 'filings ', 'sec ', 'add ', 'news '];
+  const symbolCommands = ['s ', 'stock ', 'r ', 'report ', 'e ', 'earnings ', 'fin ', 'financials ', 'why ', 'etf ', 'filings ', 'sec ', 'add ', 'news '];
   for (const cmd of symbolCommands) {
     if (trimmed.startsWith(cmd)) {
       const partial = trimmed.slice(cmd.length).toUpperCase();
@@ -474,6 +477,14 @@ export async function run(): Promise<void> {
             await showWhy(whySymbol);
             currentStopSpinner();
           } else {
+          // Check for financials command
+          const financialsResult = parseFinancialsCommand(trimmed);
+          if (financialsResult) {
+            const typeLabel = financialsResult.type ? ` (${financialsResult.type})` : '';
+            currentStopSpinner = showSpinner(`Fetching ${financialsResult.symbol} financial statements${typeLabel}...`);
+            await showFinancials(financialsResult.symbol, financialsResult.type);
+            currentStopSpinner();
+          } else {
           // Check parsed commands
           const reportTicker = parseReportCommand(trimmed);
           if (reportTicker) {
@@ -575,6 +586,7 @@ export async function run(): Promise<void> {
               }
             }
           }
+        }
         }
         }
       } catch (error) {

@@ -107,6 +107,7 @@ export function showHelp(): void {
     `  ${chalk.yellow('s <SYM>')} ${chalk.dim('[TF]')}      ${chalk.dim('Stock profile (s AAPL 1y)')}`,
     `  ${chalk.yellow('r <SYM>')}           ${chalk.dim('AI research report')}`,
     `  ${chalk.yellow('e <SYM>')}           ${chalk.dim('Earnings report')}`,
+    `  ${chalk.yellow('fin <SYM>')} ${chalk.dim('[type]')}  ${chalk.dim('Financial statements')}`,
     `  ${chalk.yellow('why <SYM>')}         ${chalk.dim('Explain stock movement')}`,
     `  ${chalk.yellow('cs <S1> <S2>...')}   ${chalk.dim('Compare stocks')}`,
   ];

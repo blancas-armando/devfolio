@@ -35,3 +35,11 @@ export { displayMarketPulse, displayPulseConfig } from './pulse.js';
 
 // Screener displays
 export { displayScreenerResults, displayScreenerPresets, formatRelatedStocksSection } from './screener.js';
+
+// Financial statements displays
+export {
+  displayFinancialStatements,
+  displayIncomeStatement,
+  displayBalanceSheet,
+  displayCashFlowStatement,
+} from './financials.js';
