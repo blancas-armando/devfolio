@@ -2,7 +2,7 @@ import * as readline from 'readline';
 import chalk from 'chalk';
 import asciichart from 'asciichart';
 import { chat } from './ai/agent.js';
-import { getWatchlist, addToWatchlist } from './db/watchlist.js';
+import { getWatchlist, addToWatchlist, removeFromWatchlist } from './db/watchlist.js';
 import { getPortfolio, addHolding } from './db/portfolio.js';
 import {
   getQuotes,
@@ -2211,88 +2211,119 @@ function showHomeScreen(): void {
 }
 
 function showHelp(): void {
-  console.log('');
+  const width = 66;
+  const innerWidth = width - 4;
 
-  const commands = [
-    `${chalk.yellow('w')}, ${chalk.yellow('watchlist')}       ${chalk.dim('-')} Show watchlist with live quotes`,
-    `${chalk.yellow('p')}, ${chalk.yellow('portfolio')}       ${chalk.dim('-')} Show portfolio summary`,
-    `${chalk.yellow('s <SYM>')}            ${chalk.dim('-')} Company profile (e.g., s AAPL)`,
-    `${chalk.yellow('r <SYM>')}            ${chalk.dim('-')} AI research primer (e.g., r NVDA)`,
-    `${chalk.yellow('e <SYM>')}            ${chalk.dim('-')} Earnings & SEC filings (e.g., e MSFT)`,
-    `${chalk.yellow('etf <SYM>')}          ${chalk.dim('-')} ETF profile & holdings (e.g., etf VTI)`,
-    `${chalk.yellow('compare <S1> <S2>')}  ${chalk.dim('-')} Compare ETFs (e.g., compare SPY VOO)`,
-    `${chalk.yellow('cs <S1> <S2>...')}    ${chalk.dim('-')} Compare stocks (e.g., cs AAPL MSFT GOOGL)`,
-    `${chalk.yellow('b')}, ${chalk.yellow('brief')}           ${chalk.dim('-')} AI market brief (full analysis)`,
-    `${chalk.yellow('m')}, ${chalk.yellow('market')}          ${chalk.dim('-')} Market overview (indices, sectors, movers)`,
-    `${chalk.yellow('cal')}, ${chalk.yellow('events')}        ${chalk.dim('-')} Upcoming earnings & dividends`,
-    `${chalk.yellow('news')} ${chalk.dim('[SYM]')}         ${chalk.dim('-')} Market news or stock-specific news`,
-    `${chalk.yellow('read <N>')}           ${chalk.dim('-')} Read news article N`,
-    `${chalk.yellow('filings <SYM>')}      ${chalk.dim('-')} SEC filings (10-K, 10-Q, 8-K)`,
-    `${chalk.yellow('filing <N>')}         ${chalk.dim('-')} Read SEC filing N`,
-    `${chalk.yellow('clear')}, ${chalk.yellow('home')}        ${chalk.dim('-')} Clear screen and show home`,
-    `${chalk.yellow('?')}, ${chalk.yellow('help')}            ${chalk.dim('-')} Show this help`,
-    `${chalk.yellow('q')}, ${chalk.yellow('quit')}            ${chalk.dim('-')} Exit DevFolio`,
+  console.log('');
+  console.log(chalk.cyan('╭' + '─'.repeat(width - 2) + '╮'));
+  console.log(chalk.cyan('│') + ' ' + chalk.bold.white('DevFolio Commands') + ' '.repeat(innerWidth - 17) + ' ' + chalk.cyan('│'));
+  console.log(chalk.cyan('├' + '─'.repeat(width - 2) + '┤'));
+
+  // MARKET section
+  console.log(chalk.cyan('│') + ' ' + chalk.bold.yellow('MARKET') + ' '.repeat(innerWidth - 6) + ' ' + chalk.cyan('│'));
+  const marketCmds = [
+    `  ${chalk.yellow('b')}, ${chalk.yellow('brief')}          ${chalk.dim('AI market analysis')}`,
+    `  ${chalk.yellow('news')} ${chalk.dim('[SYM]')}        ${chalk.dim('Market or stock news')}`,
+    `  ${chalk.yellow('read <N>')}          ${chalk.dim('Read article N')}`,
   ];
+  for (const line of marketCmds) {
+    const stripped = stripAnsi(line);
+    console.log(chalk.cyan('│') + line + ' '.repeat(Math.max(0, innerWidth - stripped.length)) + ' ' + chalk.cyan('│'));
+  }
 
-  drawBox('Commands', commands, 62);
+  // STOCKS section
+  console.log(chalk.cyan('├' + '─'.repeat(width - 2) + '┤'));
+  console.log(chalk.cyan('│') + ' ' + chalk.bold.yellow('STOCKS') + ' '.repeat(innerWidth - 6) + ' ' + chalk.cyan('│'));
+  const stockCmds = [
+    `  ${chalk.yellow('s <SYM>')}           ${chalk.dim('Stock profile (s AAPL)')}`,
+    `  ${chalk.yellow('r <SYM>')}           ${chalk.dim('AI research report')}`,
+    `  ${chalk.yellow('e <SYM>')}           ${chalk.dim('Earnings report')}`,
+    `  ${chalk.yellow('cs <S1> <S2>...')}   ${chalk.dim('Compare stocks')}`,
+  ];
+  for (const line of stockCmds) {
+    const stripped = stripAnsi(line);
+    console.log(chalk.cyan('│') + line + ' '.repeat(Math.max(0, innerWidth - stripped.length)) + ' ' + chalk.cyan('│'));
+  }
 
+  // ETFs section
+  console.log(chalk.cyan('├' + '─'.repeat(width - 2) + '┤'));
+  console.log(chalk.cyan('│') + ' ' + chalk.bold.yellow('ETFs') + ' '.repeat(innerWidth - 4) + ' ' + chalk.cyan('│'));
+  const etfCmds = [
+    `  ${chalk.yellow('etf <SYM>')}         ${chalk.dim('ETF profile (etf VTI)')}`,
+    `  ${chalk.yellow('compare <S1> <S2>')} ${chalk.dim('Compare ETFs')}`,
+  ];
+  for (const line of etfCmds) {
+    const stripped = stripAnsi(line);
+    console.log(chalk.cyan('│') + line + ' '.repeat(Math.max(0, innerWidth - stripped.length)) + ' ' + chalk.cyan('│'));
+  }
+
+  // SEC FILINGS section
+  console.log(chalk.cyan('├' + '─'.repeat(width - 2) + '┤'));
+  console.log(chalk.cyan('│') + ' ' + chalk.bold.yellow('SEC FILINGS') + ' '.repeat(innerWidth - 11) + ' ' + chalk.cyan('│'));
+  const secCmds = [
+    `  ${chalk.yellow('filings <SYM>')}     ${chalk.dim('List 10-K, 10-Q, 8-K')}`,
+    `  ${chalk.yellow('filing <N>')}        ${chalk.dim('Read filing N')}`,
+  ];
+  for (const line of secCmds) {
+    const stripped = stripAnsi(line);
+    console.log(chalk.cyan('│') + line + ' '.repeat(Math.max(0, innerWidth - stripped.length)) + ' ' + chalk.cyan('│'));
+  }
+
+  // PORTFOLIO section
+  console.log(chalk.cyan('├' + '─'.repeat(width - 2) + '┤'));
+  console.log(chalk.cyan('│') + ' ' + chalk.bold.yellow('PORTFOLIO') + ' '.repeat(innerWidth - 9) + ' ' + chalk.cyan('│'));
+  const portfolioCmds = [
+    `  ${chalk.yellow('w')}, ${chalk.yellow('watchlist')}      ${chalk.dim('View watchlist + events')}`,
+    `  ${chalk.yellow('p')}, ${chalk.yellow('portfolio')}      ${chalk.dim('View portfolio')}`,
+    `  ${chalk.yellow('add <SYM>')}         ${chalk.dim('Add to watchlist')}`,
+    `  ${chalk.yellow('rm <SYM>')}          ${chalk.dim('Remove from watchlist')}`,
+  ];
+  for (const line of portfolioCmds) {
+    const stripped = stripAnsi(line);
+    console.log(chalk.cyan('│') + line + ' '.repeat(Math.max(0, innerWidth - stripped.length)) + ' ' + chalk.cyan('│'));
+  }
+
+  // OTHER section
+  console.log(chalk.cyan('├' + '─'.repeat(width - 2) + '┤'));
+  console.log(chalk.cyan('│') + ' ' + chalk.bold.yellow('OTHER') + ' '.repeat(innerWidth - 5) + ' ' + chalk.cyan('│'));
+  const otherCmds = [
+    `  ${chalk.yellow('clear')}, ${chalk.yellow('home')}       ${chalk.dim('Clear screen')}`,
+    `  ${chalk.yellow('?')}, ${chalk.yellow('help')}           ${chalk.dim('Show this help')}`,
+    `  ${chalk.yellow('q')}, ${chalk.yellow('quit')}           ${chalk.dim('Exit')}`,
+  ];
+  for (const line of otherCmds) {
+    const stripped = stripAnsi(line);
+    console.log(chalk.cyan('│') + line + ' '.repeat(Math.max(0, innerWidth - stripped.length)) + ' ' + chalk.cyan('│'));
+  }
+
+  console.log(chalk.cyan('╰' + '─'.repeat(width - 2) + '╯'));
+
+  // Tips
   console.log('');
-  console.log(chalk.bold.cyan('  ETF Lookup'));
-  console.log(chalk.dim('  The "etf" command shows comprehensive ETF data:'));
-  console.log(chalk.dim('    - Top holdings with allocation percentages'));
-  console.log(chalk.dim('    - Asset allocation (stocks/bonds/cash)'));
-  console.log(chalk.dim('    - Sector breakdown with visual bars'));
-  console.log(chalk.dim('    - Performance: YTD, 1Y, 3Y, 5Y returns'));
-  console.log(chalk.dim('    - Expense ratio, yield, AUM, inception date'));
-  console.log('');
-  console.log(chalk.bold.cyan('  ETF Comparison'));
-  console.log(chalk.dim('  Use "compare" to see ETFs side-by-side:'));
-  console.log(chalk.dim('    - Expense ratios, yields, performance'));
-  console.log(chalk.dim('    - Top holdings overlap'));
-  console.log(chalk.dim('    - Risk metrics comparison'));
-  console.log('');
-  console.log(chalk.bold.cyan('  Research Reports'));
-  console.log(chalk.dim('  The "r" command generates an AI-powered research primer with:'));
-  console.log(chalk.dim('    - Executive summary & business overview'));
-  console.log(chalk.dim('    - Key segments & competitive position'));
-  console.log(chalk.dim('    - Financial highlights & valuation'));
-  console.log(chalk.dim('    - Catalysts, risks, bull/bear cases'));
-  console.log('');
-  console.log(chalk.bold.cyan('  Earnings Reports'));
-  console.log(chalk.dim('  The "e" command pulls SEC EDGAR + Yahoo Finance data:'));
-  console.log(chalk.dim('    - Quarterly results: Rev, Op Income, OPM, EPS vs consensus'));
-  console.log(chalk.dim('    - Key performance indicators with beat/miss analysis'));
-  console.log(chalk.dim('    - FY guidance with raised/lowered/maintained status'));
-  console.log(chalk.dim('    - Recent 10-K, 10-Q, 8-K SEC filings'));
-  console.log(chalk.dim('    - AI-generated earnings analysis & outlook'));
-  console.log('');
-  console.log(chalk.bold.cyan('  SEC Filings'));
-  console.log(chalk.dim('  The "filings" command shows recent SEC filings:'));
-  console.log(chalk.dim('    - 10-K: Annual reports with business overview & financials'));
-  console.log(chalk.dim('    - 10-Q: Quarterly reports with interim financials'));
-  console.log(chalk.dim('    - 8-K: Material events (earnings, acquisitions, changes)'));
-  console.log(chalk.dim('  Use "filing N" to read key sections from any filing.'));
-  console.log('');
-  console.log(chalk.bold.cyan('  Natural Language'));
-  console.log(chalk.dim('  You can also ask naturally:'));
-  console.log(chalk.dim('    - "tell me about Apple"'));
-  console.log(chalk.dim('    - "what does VTI hold?"'));
-  console.log(chalk.dim('    - "compare SPY and VOO"'));
-  console.log(chalk.dim('    - "add TSLA to watchlist"'));
+  console.log(chalk.bold.cyan('  Tips'));
+  console.log(chalk.dim('  - Use natural language: "tell me about Apple"'));
+  console.log(chalk.dim('  - AI commands (b, r, e) provide deeper analysis'));
+  console.log(chalk.dim('  - Watchlist shows upcoming earnings & dividends'));
   console.log('');
 }
 
 async function showWatchlist(): Promise<void> {
-  const symbols = getWatchlist();
+  const watchlistItems = getWatchlist();
 
-  if (symbols.length === 0) {
+  if (watchlistItems.length === 0) {
     console.log('');
-    console.log(chalk.dim('  Watchlist is empty. Try "add AAPL to watchlist"'));
+    console.log(chalk.dim('  Watchlist is empty. Try "add AAPL" to add stocks.'));
     console.log('');
     return;
   }
 
-  const quotes = await getQuotes(symbols);
+  const symbols = watchlistItems.map(w => w.symbol);
+
+  // Fetch quotes and events in parallel
+  const [quotes, calendar] = await Promise.all([
+    getQuotes(symbols),
+    getEventsCalendar(symbols),
+  ]);
 
   if (quotes.length === 0) {
     console.log(chalk.red('  Error: Could not fetch quotes'));
@@ -2313,6 +2344,25 @@ async function showWatchlist(): Promise<void> {
     const changeColor = isUp ? chalk.green : chalk.red;
     const change = changeColor(`${arrow} ${formatPercent(q.changePercent).padEnd(8)}`);
     lines.push(`${symbol} ${price} ${change}`);
+  }
+
+  // Add upcoming events summary if any
+  const upcomingEarnings = calendar.earnings.slice(0, 3);
+  const upcomingDividends = calendar.dividends.slice(0, 2);
+
+  if (upcomingEarnings.length > 0 || upcomingDividends.length > 0) {
+    lines.push('');
+    lines.push(chalk.dim('─'.repeat(46)));
+    lines.push(chalk.bold.yellow('Upcoming Events'));
+
+    for (const e of upcomingEarnings) {
+      const dateStr = e.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      lines.push(`  ${chalk.cyan('E')} ${chalk.white(e.symbol.padEnd(6))} ${chalk.dim('Earnings')} ${chalk.yellow(dateStr)}`);
+    }
+    for (const d of upcomingDividends) {
+      const dateStr = d.exDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      lines.push(`  ${chalk.green('D')} ${chalk.white(d.symbol.padEnd(6))} ${chalk.dim('Ex-Div')}   ${chalk.yellow(dateStr)}`);
+    }
   }
 
   drawBox('Watchlist', lines, 58);
@@ -2404,8 +2454,8 @@ function parseReportCommand(input: string): string | null {
 }
 
 function parseEarningsCommand(input: string): string | null {
-  // Match: "e AAPL", "earnings AAPL", "sec AAPL", "filings AAPL"
-  const earningsMatch = input.match(/^(?:e|earnings|sec|filings)\s+([A-Za-z]{1,5})$/i);
+  // Match: "e AAPL", "earnings AAPL"
+  const earningsMatch = input.match(/^(?:e|earnings)\s+([A-Za-z]{1,5})$/i);
   if (earningsMatch) return earningsMatch[1].toUpperCase();
 
   return null;
@@ -2498,25 +2548,19 @@ export async function run(): Promise<void> {
           showHelp();
         } else if (cmd === 'clear' || cmd === 'home') {
           showHomeScreen();
-        } else if (cmd === 'watchlist' || cmd === 'w') {
-          const stop = showSpinner('Fetching quotes...');
+        } else if (cmd === 'watchlist' || cmd === 'w' || cmd === 'cal' || cmd === 'calendar' || cmd === 'events') {
+          // Note: 'cal', 'calendar', 'events' now show watchlist with events included
+          const stop = showSpinner('Fetching watchlist...');
           await showWatchlist();
           stop();
         } else if (cmd === 'portfolio' || cmd === 'p') {
           const stop = showSpinner('Loading portfolio...');
           await showPortfolio();
           stop();
-        } else if (cmd === 'brief' || cmd === 'b') {
+        } else if (cmd === 'brief' || cmd === 'b' || cmd === 'market' || cmd === 'm') {
+          // Note: 'market' and 'm' now redirect to brief for richer analysis
           const stop = showSpinner('Generating market brief...');
           await showBrief();
-          stop();
-        } else if (cmd === 'market' || cmd === 'm') {
-          const stop = showSpinner('Fetching market data...');
-          await showMarket();
-          stop();
-        } else if (cmd === 'cal' || cmd === 'calendar' || cmd === 'events') {
-          const stop = showSpinner('Fetching upcoming events...');
-          await showCalendar();
           stop();
         } else if (cmd === 'news' || cmd.startsWith('news ')) {
           // Parse optional symbol(s)
@@ -2605,6 +2649,54 @@ export async function run(): Promise<void> {
           } else {
             console.log('');
             console.log(chalk.red('  Usage: filing <number> (e.g., filing 1)'));
+            console.log('');
+          }
+        } else if (cmd.startsWith('add ')) {
+          // Add symbol(s) to watchlist
+          const addMatch = trimmed.match(/^add\s+(.+)$/i);
+          if (addMatch) {
+            const symbols = addMatch[1].split(/[\s,]+/).map(s => s.toUpperCase()).filter(s => /^[A-Z]{1,5}$/.test(s));
+            if (symbols.length === 0) {
+              console.log('');
+              console.log(chalk.red('  Invalid symbol(s). Use 1-5 letter ticker symbols.'));
+              console.log('');
+            } else {
+              const added = addToWatchlist(symbols);
+              console.log('');
+              if (added.length > 0) {
+                console.log(chalk.green(`  Added to watchlist: ${added.join(', ')}`));
+              } else {
+                console.log(chalk.yellow(`  ${symbols.join(', ')} already in watchlist`));
+              }
+              console.log('');
+            }
+          } else {
+            console.log('');
+            console.log(chalk.red('  Usage: add <symbol> (e.g., add AAPL MSFT)'));
+            console.log('');
+          }
+        } else if (cmd.startsWith('rm ') || cmd.startsWith('remove ')) {
+          // Remove symbol(s) from watchlist
+          const rmMatch = trimmed.match(/^(?:rm|remove)\s+(.+)$/i);
+          if (rmMatch) {
+            const symbols = rmMatch[1].split(/[\s,]+/).map(s => s.toUpperCase()).filter(s => /^[A-Z]{1,5}$/.test(s));
+            if (symbols.length === 0) {
+              console.log('');
+              console.log(chalk.red('  Invalid symbol(s). Use 1-5 letter ticker symbols.'));
+              console.log('');
+            } else {
+              const removed = removeFromWatchlist(symbols);
+              console.log('');
+              if (removed.length > 0) {
+                console.log(chalk.green(`  Removed from watchlist: ${removed.join(', ')}`));
+              } else {
+                console.log(chalk.yellow(`  ${symbols.join(', ')} not found in watchlist`));
+              }
+              console.log('');
+            }
+          } else {
+            console.log('');
+            console.log(chalk.red('  Usage: rm <symbol> (e.g., rm AAPL)'));
             console.log('');
           }
         } else {
