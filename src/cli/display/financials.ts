@@ -79,6 +79,22 @@ function renderRow(
   return chalk.dim(paddedLabel) + formattedValues.join('');
 }
 
+function renderMarginRow(
+  label: string,
+  margins: (number | null)[],
+  labelWidth: number,
+  colWidth: number,
+): string {
+  const paddedLabel = ('  ' + label).padEnd(labelWidth);
+
+  const formattedValues = margins.map(m => {
+    const formatted = m !== null ? `${m.toFixed(1)}%` : '--';
+    return formatted.padStart(colWidth);
+  });
+
+  return chalk.dim(paddedLabel + formattedValues.join(''));
+}
+
 function renderSectionHeader(title: string, width: number): string {
   return chalk.cyan.bold(title.padEnd(width));
 }
@@ -125,6 +141,11 @@ export function displayIncomeStatement(statements: FinancialStatements): void {
     console.log(chalk.cyan('│') + ' ' + row + ' '.repeat(Math.max(0, totalWidth - 4 - stripAnsi(row).length)) + ' ' + chalk.cyan('│'));
   };
 
+  const printMargin = (label: string, margins: (number | null)[]) => {
+    const row = renderMarginRow(label, margins, labelWidth, colWidth);
+    console.log(chalk.cyan('│') + ' ' + row + ' '.repeat(Math.max(0, totalWidth - 4 - stripAnsi(row).length)) + ' ' + chalk.cyan('│'));
+  };
+
   // Revenue section
   printRow('Total Revenue', periods.map(p => p.totalRevenue), 0, false, true);
   printRow('Cost of Revenue', periods.map(p => p.costOfRevenue), 2);
@@ -135,10 +156,7 @@ export function displayIncomeStatement(statements: FinancialStatements): void {
   const grossMargins = periods.map(p =>
     (p.grossProfit && p.totalRevenue) ? (p.grossProfit / p.totalRevenue * 100) : null
   );
-  const marginRow = ' '.repeat(labelWidth) + grossMargins.map(m =>
-    m !== null ? chalk.dim(`${m.toFixed(1)}%`.padStart(colWidth)) : chalk.dim('--'.padStart(colWidth))
-  ).join('');
-  console.log(chalk.cyan('│') + ' ' + chalk.dim('  Gross Margin') + marginRow.slice(14 + labelWidth - 14) + ' '.repeat(Math.max(0, totalWidth - 4 - stripAnsi(marginRow).length - 14)) + ' ' + chalk.cyan('│'));
+  printMargin('Gross Margin', grossMargins);
 
   console.log(chalk.cyan('│') + ' ' + ' '.repeat(totalWidth - 4) + ' ' + chalk.cyan('│'));
 
@@ -151,10 +169,7 @@ export function displayIncomeStatement(statements: FinancialStatements): void {
   const opMargins = periods.map(p =>
     (p.operatingIncome && p.totalRevenue) ? (p.operatingIncome / p.totalRevenue * 100) : null
   );
-  const opMarginRow = ' '.repeat(labelWidth) + opMargins.map(m =>
-    m !== null ? chalk.dim(`${m.toFixed(1)}%`.padStart(colWidth)) : chalk.dim('--'.padStart(colWidth))
-  ).join('');
-  console.log(chalk.cyan('│') + ' ' + chalk.dim('  Operating Margin') + opMarginRow.slice(18 + labelWidth - 18) + ' '.repeat(Math.max(0, totalWidth - 4 - stripAnsi(opMarginRow).length - 18)) + ' ' + chalk.cyan('│'));
+  printMargin('Operating Margin', opMargins);
 
   console.log(chalk.cyan('│') + ' ' + ' '.repeat(totalWidth - 4) + ' ' + chalk.cyan('│'));
 
@@ -169,10 +184,7 @@ export function displayIncomeStatement(statements: FinancialStatements): void {
   const netMargins = periods.map(p =>
     (p.netIncome && p.totalRevenue) ? (p.netIncome / p.totalRevenue * 100) : null
   );
-  const netMarginRow = ' '.repeat(labelWidth) + netMargins.map(m =>
-    m !== null ? chalk.dim(`${m.toFixed(1)}%`.padStart(colWidth)) : chalk.dim('--'.padStart(colWidth))
-  ).join('');
-  console.log(chalk.cyan('│') + ' ' + chalk.dim('  Net Margin') + netMarginRow.slice(12 + labelWidth - 12) + ' '.repeat(Math.max(0, totalWidth - 4 - stripAnsi(netMarginRow).length - 12)) + ' ' + chalk.cyan('│'));
+  printMargin('Net Margin', netMargins);
 
   console.log(chalk.cyan('│') + ' ' + ' '.repeat(totalWidth - 4) + ' ' + chalk.cyan('│'));
   printRow('EBITDA', periods.map(p => p.ebitda), 0, false, true);
