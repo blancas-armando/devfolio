@@ -503,6 +503,8 @@ export interface IndexQuote {
   price: number;
   change: number;
   changePercent: number;
+  dayHigh: number | null;
+  dayLow: number | null;
 }
 
 export interface SectorPerformance {
@@ -524,6 +526,10 @@ export interface MarketOverview {
   gainers: MarketMover[];
   losers: MarketMover[];
   vix: number | null;
+  breadth: {
+    advancing: number;
+    declining: number;
+  };
   asOfDate: Date;
 }
 
@@ -598,6 +604,8 @@ export async function getMarketOverview(): Promise<MarketOverview> {
         price: data?.regularMarketPrice ?? 0,
         change: data?.regularMarketChange ?? 0,
         changePercent: data?.regularMarketChangePercent ?? 0,
+        dayHigh: data?.regularMarketDayHigh ?? null,
+        dayLow: data?.regularMarketDayLow ?? null,
       };
     });
 
@@ -629,6 +637,10 @@ export async function getMarketOverview(): Promise<MarketOverview> {
     const gainers = sortedByChange.slice(0, 5);
     const losers = sortedByChange.slice(-5).reverse();
 
+    // Calculate breadth
+    const advancing = allMovers.filter(m => m.changePercent > 0).length;
+    const declining = allMovers.filter(m => m.changePercent < 0).length;
+
     // VIX
     const vixQuote = Array.isArray(vixData) ? vixData[0] : vixData;
     const vix = vixQuote?.regularMarketPrice ?? null;
@@ -639,6 +651,7 @@ export async function getMarketOverview(): Promise<MarketOverview> {
       gainers,
       losers,
       vix,
+      breadth: { advancing, declining },
       asOfDate: new Date(),
     };
 
@@ -652,6 +665,7 @@ export async function getMarketOverview(): Promise<MarketOverview> {
       gainers: [],
       losers: [],
       vix: null,
+      breadth: { advancing: 0, declining: 0 },
       asOfDate: new Date(),
     };
   }

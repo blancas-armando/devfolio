@@ -152,9 +152,9 @@ export function displayCompanyProfile(profile: CompanyProfile, quickTake?: Quick
   // AI Quick Take Section
   if (quickTake) {
     console.log(chalk.dim('├' + '─'.repeat(width - 2) + '┤'));
-    const sentimentEmoji = quickTake.sentiment === 'bullish' ? '📈' : quickTake.sentiment === 'bearish' ? '📉' : '➖';
+    const sentimentIndicator = quickTake.sentiment === 'bullish' ? '▲' : quickTake.sentiment === 'bearish' ? '▼' : '-';
     const sentimentColor = quickTake.sentiment === 'bullish' ? chalk.green : quickTake.sentiment === 'bearish' ? chalk.red : chalk.yellow;
-    const headerLine = `${sentimentEmoji} AI Quick Take`;
+    const headerLine = `${sentimentIndicator} AI Quick Take`;
     console.log(chalk.dim('│') + ' ' + chalk.bold.magenta(headerLine.padEnd(innerWidth)) + ' ' + chalk.dim('│'));
     console.log(chalk.dim('├' + '─'.repeat(width - 2) + '┤'));
 

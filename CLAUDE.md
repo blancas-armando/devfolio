@@ -23,6 +23,7 @@ This project follows trunk-based development:
 - **Single responsibility** - Each file/function does one thing
 - **Explicit imports** - No barrel files that obscure dependencies
 - **Colocate related code** - Keep display logic near its data types
+- **No emojis** - Never use emojis in code, output, or UI. Use ASCII/Unicode symbols (arrows, boxes, etc.) instead
 
 ## Architecture
 
@@ -36,14 +37,14 @@ src/
 │   ├── ui.ts             # UI primitives (drawBox, spinner, etc.)
 │   └── display/
 │       ├── index.ts      # Display function exports
-│       ├── market.ts     # Brief, market overview displays
+│       ├── market.ts     # Brief (daily summary), market overview displays
 │       ├── stock.ts      # Stock profile, comparison
 │       ├── etf.ts        # ETF displays
 │       ├── earnings.ts   # Earnings report display
 │       ├── filings.ts    # SEC filings display
 │       ├── news.ts       # News feed, article display
 │       ├── portfolio.ts  # Watchlist, portfolio displays
-│       ├── pulse.ts      # Market pulse display
+│       ├── pulse.ts      # Pulse (real-time snapshot) display
 │       ├── screener.ts   # Stock screener display
 │       └── help.ts       # Help screen
 ├── ai/
@@ -54,8 +55,8 @@ src/
 ├── services/
 │   ├── market.ts         # Yahoo Finance: quotes, profiles
 │   ├── etf.ts            # ETF profiles and holdings
-│   ├── brief.ts          # AI market brief
-│   ├── pulse.ts          # Market pulse alerts + AI take
+│   ├── brief.ts          # Daily market summary (run once a day)
+│   ├── pulse.ts          # Real-time snapshot (run frequently)
 │   ├── screener.ts       # Stock screener + related stocks
 │   ├── research.ts       # AI research reports
 │   ├── earnings.ts       # Earnings + SEC data
@@ -88,8 +89,8 @@ src/
 
 | Command | Description |
 |---------|-------------|
-| `b`, `brief` | AI market analysis with indices, sectors, outlook |
-| `pulse` | Market alerts with personalized thresholds + AI take |
+| `b`, `brief` | Daily market summary - run once a day for full story |
+| `pulse` | Real-time snapshot - run often to see what's moving now |
 | `pulse config` | View/edit pulse alert thresholds |
 | `screen <preset>` | Stock screener (gainers, losers, tech, healthcare, finance...) |
 | `s <SYM>` | Stock profile with chart, AI quick take, + related stocks |
@@ -125,7 +126,8 @@ Primary data service:
 - `fetchArticleContent(url)` - Extract article text
 
 ### AI Services
-- `brief.ts` - `getMarketBrief()` - Market data + AI narrative
+- `brief.ts` - `getMarketBrief()` - Comprehensive daily summary with full AI narrative
+- `pulse.ts` - `getMarketPulse()` - Quick snapshot of what's moving right now
 - `research.ts` - `generateResearchReport(symbol)` - Deep analysis
 - `earnings.ts` - `generateEarningsReport(symbol)` - Earnings + SEC
 
