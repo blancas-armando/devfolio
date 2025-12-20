@@ -10,6 +10,8 @@ import { generateResearchReport } from '../services/research.js';
 import { generateEarningsReport } from '../services/earnings.js';
 import { getETFProfile, compareETFs } from '../services/etf.js';
 import { getRecentFilings } from '../services/sec.js';
+import { getQuickTake } from '../services/quicktake.js';
+import { explainMovement } from '../services/why.js';
 import { addToWatchlist, removeFromWatchlist } from '../db/watchlist.js';
 import {
   displayCompanyProfile,
@@ -24,6 +26,7 @@ import {
   displayArticle,
   displayFilings,
   displayFiling,
+  displayWhyExplanation,
   showWatchlist,
   showPortfolio,
   showHomeScreen,
@@ -81,22 +84,34 @@ export function parseStockCompareCommand(input: string): string[] | null {
   return null;
 }
 
+export function parseWhyCommand(input: string): string | null {
+  const whyMatch = input.match(/^why\s+([A-Za-z]{1,5})$/i);
+  if (whyMatch) return whyMatch[1].toUpperCase();
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Command Handlers
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function showStock(symbol: string): Promise<void> {
-  const profile = await getCompanyProfile(symbol.toUpperCase());
+  const upperSymbol = symbol.toUpperCase();
+
+  // Fetch profile first
+  const profile = await getCompanyProfile(upperSymbol);
 
   if (!profile) {
     console.log('');
-    console.log(chalk.red(`  Error: Could not find company: ${symbol.toUpperCase()}`));
+    console.log(chalk.red(`  Error: Could not find company: ${upperSymbol}`));
     console.log(chalk.dim(`    Try a valid ticker symbol like AAPL, MSFT, or NVDA`));
     console.log('');
     return;
   }
 
-  displayCompanyProfile(profile);
+  // Fetch AI quick take in background (don't block display)
+  const quickTake = await getQuickTake(profile);
+
+  displayCompanyProfile(profile, quickTake);
 }
 
 export async function showStockComparison(symbols: string[]): Promise<void> {
@@ -228,6 +243,20 @@ export async function showFilingContent(filingNum: number): Promise<void> {
 
   const filing = lastFilings[filingNum - 1];
   await displayFiling(filing, lastFilingsSymbol);
+}
+
+export async function showWhy(symbol: string): Promise<void> {
+  const explanation = await explainMovement(symbol.toUpperCase());
+
+  if (!explanation) {
+    console.log('');
+    console.log(chalk.red(`  Error: Could not analyze ${symbol.toUpperCase()}`));
+    console.log(chalk.dim(`    Make sure GROQ_API_KEY is set and the symbol is valid`));
+    console.log('');
+    return;
+  }
+
+  displayWhyExplanation(explanation);
 }
 
 export async function readArticle(articleNum: number): Promise<void> {

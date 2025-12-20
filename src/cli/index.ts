@@ -5,12 +5,12 @@
 
 import * as readline from 'readline';
 import chalk from 'chalk';
-import { chat } from '../ai/agent.js';
+import { streamChat } from '../ai/agent.js';
 import { getWatchlist, addToWatchlist } from '../db/watchlist.js';
 import { addHolding } from '../db/portfolio.js';
 import { DEMO_WATCHLIST, DEMO_HOLDINGS } from '../constants/index.js';
 import type { Message } from '../types/index.js';
-import { showSpinner, drawBox } from './ui.js';
+import { showSpinner } from './ui.js';
 import {
   parseStockCommand,
   parseReportCommand,
@@ -18,6 +18,7 @@ import {
   parseETFCommand,
   parseCompareCommand,
   parseStockCompareCommand,
+  parseWhyCommand,
   showStock,
   showStockComparison,
   showBrief,
@@ -28,6 +29,7 @@ import {
   showETFComparison,
   showFilings,
   showFilingContent,
+  showWhy,
   readArticle,
   handleAddToWatchlist,
   handleRemoveFromWatchlist,
@@ -166,6 +168,13 @@ export async function run(): Promise<void> {
         } else if (cmd.startsWith('rm ') || cmd.startsWith('remove ')) {
           handleRemoveFromWatchlist(trimmed);
         } else {
+          // Check for why command first (before stock command)
+          const whySymbol = parseWhyCommand(trimmed);
+          if (whySymbol) {
+            const stop = showSpinner(`Analyzing why ${whySymbol} is moving...`);
+            await showWhy(whySymbol);
+            stop();
+          } else {
           // Check parsed commands
           const reportTicker = parseReportCommand(trimmed);
           if (reportTicker) {
@@ -203,21 +212,32 @@ export async function run(): Promise<void> {
                       await showStock(ticker);
                       stop();
                     } else {
-                      // Send to AI
-                      const stop = showSpinner('Thinking...');
-                      const response = await chat(trimmed, chatHistory);
-                      stop();
+                      // Send to AI with streaming
+                      console.log('');
+                      process.stdout.write(chalk.dim('  '));
+                      let stopSpinner = showSpinner('Thinking...');
+                      let firstToken = true;
+
+                      const response = await streamChat(
+                        trimmed,
+                        chatHistory,
+                        (token: string) => {
+                          if (firstToken) {
+                            stopSpinner();
+                            process.stdout.write('\r\x1b[K'); // Clear spinner line
+                            process.stdout.write(chalk.cyan('  '));
+                            firstToken = false;
+                          }
+                          // Stream tokens with word wrapping at ~70 chars
+                          process.stdout.write(token);
+                        }
+                      );
+                      if (firstToken) stopSpinner(); // In case no tokens came through
+                      console.log('');
 
                       // Add to history
                       chatHistory.push({ role: 'user', content: trimmed });
                       chatHistory.push({ role: 'assistant', content: response.message });
-
-                      // Print response in a box
-                      console.log('');
-                      const responseLines = response.message.split('\n').map(line =>
-                        line.length > 52 ? line.substring(0, 49) + '...' : line
-                      );
-                      drawBox('Assistant', responseLines, 58);
 
                       // Handle tool results
                       for (const result of response.toolResults) {
@@ -255,6 +275,7 @@ export async function run(): Promise<void> {
               }
             }
           }
+        }
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Something went wrong';

@@ -26,3 +26,6 @@ export { showWatchlist, showPortfolio } from './portfolio.js';
 
 // Screen displays
 export { showHomeScreen, showHelp } from './screens.js';
+
+// Why displays
+export { displayWhyExplanation } from './why.js';

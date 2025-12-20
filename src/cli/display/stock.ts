@@ -6,6 +6,7 @@
 import chalk from 'chalk';
 import asciichart from 'asciichart';
 import type { CompanyProfile } from '../../services/market.js';
+import type { QuickTake } from '../../services/quicktake.js';
 import { formatCurrency, formatPercent } from '../../utils/format.js';
 import {
   stripAnsi,
@@ -21,7 +22,7 @@ import {
 // Company Profile Display
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function displayCompanyProfile(profile: CompanyProfile): void {
+export function displayCompanyProfile(profile: CompanyProfile, quickTake?: QuickTake | null): void {
   const width = 60;
   const innerWidth = width - 4;
 
@@ -145,6 +146,31 @@ export function displayCompanyProfile(profile: CompanyProfile): void {
     ['3 Month', formatPerfValue(profile.threeMonthReturn)],
     ['YTD', formatPerfValue(profile.ytdReturn)],
   ], width);
+
+  // AI Quick Take Section
+  if (quickTake) {
+    console.log(chalk.dim('├' + '─'.repeat(width - 2) + '┤'));
+    const sentimentEmoji = quickTake.sentiment === 'bullish' ? '📈' : quickTake.sentiment === 'bearish' ? '📉' : '➖';
+    const sentimentColor = quickTake.sentiment === 'bullish' ? chalk.green : quickTake.sentiment === 'bearish' ? chalk.red : chalk.yellow;
+    const headerLine = `${sentimentEmoji} AI Quick Take`;
+    console.log(chalk.dim('│') + ' ' + chalk.bold.magenta(headerLine.padEnd(innerWidth)) + ' ' + chalk.dim('│'));
+    console.log(chalk.dim('├' + '─'.repeat(width - 2) + '┤'));
+
+    // Summary line
+    const summaryLines = wrapText(quickTake.summary, innerWidth);
+    for (const line of summaryLines) {
+      const padding = Math.max(0, innerWidth - line.length);
+      console.log(chalk.dim('│') + ' ' + sentimentColor(line) + ' '.repeat(padding) + ' ' + chalk.dim('│'));
+    }
+
+    // Key point
+    const keyPointLine = `Key: ${quickTake.keyPoint}`;
+    const kpLines = wrapText(keyPointLine, innerWidth);
+    for (const line of kpLines) {
+      const padding = Math.max(0, innerWidth - line.length);
+      console.log(chalk.dim('│') + ' ' + chalk.dim(line) + ' '.repeat(padding) + ' ' + chalk.dim('│'));
+    }
+  }
 
   // Price Chart Section
   if (profile.historicalPrices && profile.historicalPrices.length > 10) {

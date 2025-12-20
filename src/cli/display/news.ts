@@ -9,6 +9,7 @@ import type { SECFiling } from '../../services/sec.js';
 import { getFilingText, extractKeySections, identify8KItems } from '../../services/sec.js';
 import { stripAnsi, wrapText } from '../ui.js';
 import { setLastNewsArticles, setLastFilings } from '../state.js';
+import { analyzeSentiment, getSentimentIndicator } from '../../utils/sentiment.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // News Feed Display
@@ -53,17 +54,23 @@ export function displayNewsFeed(articles: NewsArticle[], forSymbols?: string[]):
         timeAgo = `${diffDays}d ago`;
       }
 
-      // Article number
+      // Sentiment analysis
+      const sentiment = analyzeSentiment(article.title);
+      const sentimentIndicator = getSentimentIndicator(sentiment);
+      const sentimentColor = sentiment === 'positive' ? chalk.green :
+                             sentiment === 'negative' ? chalk.red : chalk.dim;
+
+      // Article number with sentiment
       const numStr = chalk.cyan(`[${index + 1}]`);
 
-      // Truncate title to fit (account for number prefix)
-      const maxTitleLen = innerWidth - 6;
+      // Truncate title to fit (account for number prefix and sentiment indicator)
+      const maxTitleLen = innerWidth - 8;
       const truncTitle = article.title.length > maxTitleLen
         ? article.title.slice(0, maxTitleLen - 3) + '...'
         : article.title;
 
-      // Title line with number
-      const titleLine = `${numStr} ${chalk.white(truncTitle)}`;
+      // Title line with number and sentiment
+      const titleLine = `${numStr} ${sentimentColor(sentimentIndicator)} ${chalk.white(truncTitle)}`;
       const titleStripped = stripAnsi(titleLine);
       const titlePadding = Math.max(0, innerWidth - titleStripped.length);
       console.log(chalk.cyan('│') + ' ' + titleLine + ' '.repeat(titlePadding) + ' ' + chalk.cyan('│'));

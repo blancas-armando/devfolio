@@ -85,6 +85,7 @@ export function showHelp(): void {
     `  ${chalk.yellow('s <SYM>')}           ${chalk.dim('Stock profile (s AAPL)')}`,
     `  ${chalk.yellow('r <SYM>')}           ${chalk.dim('AI research report')}`,
     `  ${chalk.yellow('e <SYM>')}           ${chalk.dim('Earnings report')}`,
+    `  ${chalk.yellow('why <SYM>')}         ${chalk.dim('Explain stock movement')}`,
     `  ${chalk.yellow('cs <S1> <S2>...')}   ${chalk.dim('Compare stocks')}`,
   ];
   for (const line of stockCmds) {
