@@ -5,6 +5,7 @@
 
 import chalk from 'chalk';
 import { LOGO, TAGLINE, VERSION, drawBox, drawDivider, getTerminalWidth, centerText, stripAnsi } from '../ui.js';
+import { getTutorialConfig } from '../../db/config.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Home Screen
@@ -58,7 +59,15 @@ export function showHomeScreen(): void {
   drawBox('Quick Commands', commands, 58);
 
   console.log('');
-  console.log(chalk.dim('  Tip: Try "e NVDA" for earnings history + SEC filings analysis'));
+
+  // Show tutorial hint for users who haven't completed it
+  const tutorialConfig = getTutorialConfig();
+  if (!tutorialConfig.completed) {
+    console.log(chalk.cyan('  New here? ') + chalk.dim('Type ') + chalk.yellow('tutorial') + chalk.dim(' for a quick guided tour'));
+  } else {
+    console.log(chalk.dim('  Tip: Try "e NVDA" for earnings history + SEC filings analysis'));
+  }
+
   console.log('');
   drawDivider('─');
   console.log('');
@@ -82,8 +91,8 @@ export function showHelp(): void {
   const marketCmds = [
     `  ${chalk.yellow('b')}, ${chalk.yellow('brief')}          ${chalk.dim('AI market analysis')}`,
     `  ${chalk.yellow('pulse')}             ${chalk.dim('Market alerts & AI take')}`,
-    `  ${chalk.yellow('screen')} ${chalk.dim('<preset>')}   ${chalk.dim('Stock screener (gainers, value...)')}`,
-    `  ${chalk.yellow('news')} ${chalk.dim('[SYM]')}        ${chalk.dim('Market or stock news')}`,
+    `  ${chalk.yellow('sc')}, ${chalk.yellow('screen')} ${chalk.dim('<p>')}   ${chalk.dim('Stock screener (gainers, value...)')}`,
+    `  ${chalk.yellow('n')}, ${chalk.yellow('news')} ${chalk.dim('[SYM]')}    ${chalk.dim('Market or stock news')}`,
     `  ${chalk.yellow('read <N>')}          ${chalk.dim('Read article N')}`,
   ];
   for (const line of marketCmds) {
@@ -95,7 +104,7 @@ export function showHelp(): void {
   console.log(chalk.cyan('├' + '─'.repeat(width - 2) + '┤'));
   console.log(chalk.cyan('│') + ' ' + chalk.bold.yellow('STOCKS') + ' '.repeat(innerWidth - 6) + ' ' + chalk.cyan('│'));
   const stockCmds = [
-    `  ${chalk.yellow('s <SYM>')}           ${chalk.dim('Stock profile (s AAPL)')}`,
+    `  ${chalk.yellow('s <SYM>')} ${chalk.dim('[TF]')}      ${chalk.dim('Stock profile (s AAPL 1y)')}`,
     `  ${chalk.yellow('r <SYM>')}           ${chalk.dim('AI research report')}`,
     `  ${chalk.yellow('e <SYM>')}           ${chalk.dim('Earnings report')}`,
     `  ${chalk.yellow('why <SYM>')}         ${chalk.dim('Explain stock movement')}`,
@@ -138,6 +147,8 @@ export function showHelp(): void {
     `  ${chalk.yellow('p')}, ${chalk.yellow('portfolio')}      ${chalk.dim('View portfolio')}`,
     `  ${chalk.yellow('add <SYM>')}         ${chalk.dim('Add to watchlist')}`,
     `  ${chalk.yellow('rm <SYM>')}          ${chalk.dim('Remove from watchlist')}`,
+    `  ${chalk.yellow('groups')}            ${chalk.dim('List saved comparison groups')}`,
+    `  ${chalk.yellow('group load <n>')}    ${chalk.dim('Load and compare a group')}`,
   ];
   for (const line of portfolioCmds) {
     const stripped = stripAnsi(line);
@@ -148,6 +159,8 @@ export function showHelp(): void {
   console.log(chalk.cyan('├' + '─'.repeat(width - 2) + '┤'));
   console.log(chalk.cyan('│') + ' ' + chalk.bold.yellow('OTHER') + ' '.repeat(innerWidth - 5) + ' ' + chalk.cyan('│'));
   const otherCmds = [
+    `  ${chalk.yellow('history')} ${chalk.dim('[N]')}       ${chalk.dim('Show command history')}`,
+    `  ${chalk.yellow('tutorial')}          ${chalk.dim('Interactive tutorial')}`,
     `  ${chalk.yellow('clear')}, ${chalk.yellow('home')}       ${chalk.dim('Clear screen')}`,
     `  ${chalk.yellow('?')}, ${chalk.yellow('help')}           ${chalk.dim('Show this help')}`,
     `  ${chalk.yellow('q')}, ${chalk.yellow('quit')}           ${chalk.dim('Exit')}`,
@@ -164,7 +177,7 @@ export function showHelp(): void {
   console.log(chalk.bold.cyan('  Tips'));
   console.log(chalk.dim('  - Press Tab for command/symbol completion'));
   console.log(chalk.dim('  - Press Ctrl+C to cancel long operations'));
+  console.log(chalk.dim('  - Timeframes: 1d, 5d, 1m, 3m, 6m, 1y, 5y (e.g. s AAPL 1y)'));
   console.log(chalk.dim('  - Use natural language: "tell me about Apple"'));
-  console.log(chalk.dim('  - AI commands (b, r, e, why) provide deeper analysis'));
   console.log('');
 }

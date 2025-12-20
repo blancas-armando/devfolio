@@ -23,12 +23,11 @@ export const LOGO = `
 export const TAGLINE = 'AI-Powered Portfolio Intelligence';
 export const VERSION = 'v0.2.0';
 
-// Display widths
+// Standardized display widths
 export const WIDTH = {
-  FULL: 78,
-  STANDARD: 72,
-  MEDIUM: 66,
-  COMPACT: 58,
+  COMPACT: 60,    // Watchlist, portfolio, simple displays
+  STANDARD: 72,   // Most content (news, market, stock profiles)
+  FULL: 78,       // Wide content (comparisons, detailed reports)
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -181,5 +180,174 @@ export function displayWarning(message: string): void {
 export function displaySuccess(message: string): void {
   console.log('');
   console.log(chalk.green(`  ${message}`));
+  console.log('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Multi-Stage Progress
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ProgressStage {
+  label: string;
+  status: 'pending' | 'active' | 'done' | 'error';
+}
+
+const progressFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+/**
+ * Show multi-stage progress indicator
+ * Returns an object with methods to update stages and complete
+ */
+export function showProgress(stages: string[]): {
+  update: (index: number, status: ProgressStage['status']) => void;
+  next: () => void;
+  complete: () => void;
+  error: (message?: string) => void;
+} {
+  const state: ProgressStage[] = stages.map((label, i) => ({
+    label,
+    status: i === 0 ? 'active' : 'pending',
+  }));
+
+  let currentIndex = 0;
+  let frameIndex = 0;
+  let interval: NodeJS.Timeout | null = null;
+
+  const render = () => {
+    // Move cursor up to rewrite all lines
+    if (currentIndex > 0 || state.some(s => s.status !== 'pending')) {
+      process.stdout.write(`\x1b[${state.length}A`);
+    }
+
+    for (const stage of state) {
+      let icon: string;
+      let color: typeof chalk;
+
+      switch (stage.status) {
+        case 'done':
+          icon = chalk.green('✓');
+          color = chalk.dim;
+          break;
+        case 'active':
+          icon = chalk.cyan(progressFrames[frameIndex]);
+          color = chalk.white;
+          break;
+        case 'error':
+          icon = chalk.red('✗');
+          color = chalk.red;
+          break;
+        default:
+          icon = chalk.dim('○');
+          color = chalk.dim;
+      }
+
+      process.stdout.write(`\r${icon} ${color(stage.label)}\x1b[K\n`);
+    }
+  };
+
+  // Start animation
+  interval = setInterval(() => {
+    frameIndex = (frameIndex + 1) % progressFrames.length;
+    render();
+  }, 80);
+
+  render();
+
+  return {
+    update(index: number, status: ProgressStage['status']) {
+      if (index >= 0 && index < state.length) {
+        state[index].status = status;
+        render();
+      }
+    },
+
+    next() {
+      if (currentIndex < state.length) {
+        state[currentIndex].status = 'done';
+        currentIndex++;
+        if (currentIndex < state.length) {
+          state[currentIndex].status = 'active';
+        }
+        render();
+      }
+    },
+
+    complete() {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+      // Mark all remaining as done
+      for (const stage of state) {
+        if (stage.status === 'active' || stage.status === 'pending') {
+          stage.status = 'done';
+        }
+      }
+      render();
+    },
+
+    error(message?: string) {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+      // Mark current as error
+      if (currentIndex < state.length) {
+        state[currentIndex].status = 'error';
+      }
+      render();
+      if (message) {
+        console.log(chalk.red(`  ${message}`));
+      }
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Simple Progress Bar
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function renderProgressBar(
+  current: number,
+  total: number,
+  width: number = 20
+): string {
+  const ratio = Math.min(current / total, 1);
+  const filled = Math.round(ratio * width);
+  const empty = width - filled;
+
+  return chalk.green('█'.repeat(filled)) + chalk.dim('░'.repeat(empty));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Actionable Errors
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ActionableError {
+  message: string;
+  suggestions?: string[];
+  tryCommands?: string[];
+}
+
+export function displayActionableError(error: ActionableError): void {
+  console.log('');
+  console.log(chalk.red(`  Error: ${error.message}`));
+
+  if (error.suggestions && error.suggestions.length > 0) {
+    console.log('');
+    console.log(chalk.dim('  Suggestions:'));
+    for (const suggestion of error.suggestions) {
+      console.log(chalk.dim(`  - ${suggestion}`));
+    }
+  }
+
+  if (error.tryCommands && error.tryCommands.length > 0) {
+    console.log('');
+    console.log(chalk.dim('  Try:'));
+    for (const cmd of error.tryCommands) {
+      console.log(chalk.yellow(`    ${cmd}`));
+    }
+  }
+
   console.log('');
 }

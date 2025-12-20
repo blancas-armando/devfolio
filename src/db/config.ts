@@ -16,8 +16,50 @@ export interface PulseConfig {
   topMoversCount: number;        // Number of movers to show (default: 5)
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Tutorial Configuration Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface TutorialConfig {
+  completed: boolean;            // Has the user completed the tutorial?
+  skipped: boolean;              // Did the user skip the tutorial?
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Indicator Configuration Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface IndicatorConfig {
+  showMA20: boolean;             // Show 20-day moving average
+  showMA50: boolean;             // Show 50-day moving average
+  showMA200: boolean;            // Show 200-day moving average
+  showRSI: boolean;              // Show RSI indicator
+  rsiPeriod: number;             // RSI period (default: 14)
+  showMACD: boolean;             // Show MACD indicator
+  showBollingerBands: boolean;   // Show Bollinger Bands
+  bbPeriod: number;              // Bollinger Bands period (default: 20)
+  bbStdDev: number;              // Bollinger Bands std dev (default: 2)
+  showVolume: boolean;           // Show volume analysis
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Display Configuration Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type ChartTimeframe = '1d' | '5d' | '1m' | '3m' | '6m' | '1y' | '5y';
+
+export interface DisplayConfig {
+  defaultChartTimeframe: ChartTimeframe;  // Default chart timeframe
+  showDetailedProfile: boolean;           // Show full profile by default
+  hintsEnabled: boolean;                  // Show contextual hints
+  hintUsageCount: number;                 // Track hint usage for fading
+}
+
 export interface AppConfig {
   pulse: PulseConfig;
+  tutorial: TutorialConfig;
+  indicators: IndicatorConfig;
+  display: DisplayConfig;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -34,8 +76,36 @@ const DEFAULT_PULSE_CONFIG: PulseConfig = {
   topMoversCount: 5,
 };
 
+const DEFAULT_TUTORIAL_CONFIG: TutorialConfig = {
+  completed: false,
+  skipped: false,
+};
+
+const DEFAULT_INDICATOR_CONFIG: IndicatorConfig = {
+  showMA20: true,
+  showMA50: true,
+  showMA200: false,
+  showRSI: true,
+  rsiPeriod: 14,
+  showMACD: false,
+  showBollingerBands: false,
+  bbPeriod: 20,
+  bbStdDev: 2,
+  showVolume: true,
+};
+
+const DEFAULT_DISPLAY_CONFIG: DisplayConfig = {
+  defaultChartTimeframe: '3m',
+  showDetailedProfile: false,
+  hintsEnabled: true,
+  hintUsageCount: 0,
+};
+
 const DEFAULT_CONFIG: AppConfig = {
   pulse: DEFAULT_PULSE_CONFIG,
+  tutorial: DEFAULT_TUTORIAL_CONFIG,
+  indicators: DEFAULT_INDICATOR_CONFIG,
+  display: DEFAULT_DISPLAY_CONFIG,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -66,6 +136,9 @@ export function getConfig(): AppConfig {
     // Merge with defaults to ensure all fields exist
     return {
       pulse: { ...DEFAULT_PULSE_CONFIG, ...loaded.pulse },
+      tutorial: { ...DEFAULT_TUTORIAL_CONFIG, ...loaded.tutorial },
+      indicators: { ...DEFAULT_INDICATOR_CONFIG, ...loaded.indicators },
+      display: { ...DEFAULT_DISPLAY_CONFIG, ...loaded.display },
     };
   } catch {
     return DEFAULT_CONFIG;
@@ -93,4 +166,81 @@ export function resetPulseConfig(): PulseConfig {
   config.pulse = { ...DEFAULT_PULSE_CONFIG };
   saveConfig(config);
   return config.pulse;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tutorial Config Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function getTutorialConfig(): TutorialConfig {
+  return getConfig().tutorial;
+}
+
+export function markTutorialComplete(): void {
+  const config = getConfig();
+  config.tutorial = { completed: true, skipped: false };
+  saveConfig(config);
+}
+
+export function markTutorialSkipped(): void {
+  const config = getConfig();
+  config.tutorial = { completed: false, skipped: true };
+  saveConfig(config);
+}
+
+export function resetTutorial(): void {
+  const config = getConfig();
+  config.tutorial = { ...DEFAULT_TUTORIAL_CONFIG };
+  saveConfig(config);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Indicator Config Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function getIndicatorConfig(): IndicatorConfig {
+  return getConfig().indicators;
+}
+
+export function updateIndicatorConfig(updates: Partial<IndicatorConfig>): IndicatorConfig {
+  const config = getConfig();
+  config.indicators = { ...config.indicators, ...updates };
+  saveConfig(config);
+  return config.indicators;
+}
+
+export function resetIndicatorConfig(): IndicatorConfig {
+  const config = getConfig();
+  config.indicators = { ...DEFAULT_INDICATOR_CONFIG };
+  saveConfig(config);
+  return config.indicators;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Display Config Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function getDisplayConfig(): DisplayConfig {
+  return getConfig().display;
+}
+
+export function updateDisplayConfig(updates: Partial<DisplayConfig>): DisplayConfig {
+  const config = getConfig();
+  config.display = { ...config.display, ...updates };
+  saveConfig(config);
+  return config.display;
+}
+
+export function incrementHintUsage(): number {
+  const config = getConfig();
+  config.display.hintUsageCount += 1;
+  saveConfig(config);
+  return config.display.hintUsageCount;
+}
+
+export function resetDisplayConfig(): DisplayConfig {
+  const config = getConfig();
+  config.display = { ...DEFAULT_DISPLAY_CONFIG };
+  saveConfig(config);
+  return config.display;
 }

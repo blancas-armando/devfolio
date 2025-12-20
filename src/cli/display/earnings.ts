@@ -6,6 +6,7 @@
 import chalk from 'chalk';
 import type { EarningsReport, QuarterlyResults, KPIMetric, GuidanceMetric } from '../../services/earnings.js';
 import { stripAnsi, wrapText, truncateText } from '../ui.js';
+import { showHint } from '../hints.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helpers
@@ -325,5 +326,6 @@ export function displayEarningsReport(report: EarningsReport): void {
   // Disclaimer
   console.log('');
   console.log(chalk.dim('  Data from SEC EDGAR & Yahoo Finance. AI analysis for informational purposes only.'));
+  showHint('earnings', report.symbol);
   console.log('');
 }

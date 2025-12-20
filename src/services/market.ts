@@ -315,6 +315,86 @@ export async function getHistoricalDataBatch(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// OHLCV Data with Timeframe Support
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface OHLCVBar {
+  date: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export type ChartTimeframe = '1d' | '5d' | '1m' | '3m' | '6m' | '1y' | '5y';
+
+const TIMEFRAME_CONFIG: Record<ChartTimeframe, { days: number; interval: '1d' | '1wk' | '1mo' }> = {
+  '1d': { days: 1, interval: '1d' },
+  '5d': { days: 5, interval: '1d' },
+  '1m': { days: 30, interval: '1d' },
+  '3m': { days: 90, interval: '1d' },
+  '6m': { days: 180, interval: '1d' },
+  '1y': { days: 365, interval: '1d' },
+  '5y': { days: 1825, interval: '1wk' },
+};
+
+export async function getOHLCVData(
+  symbol: string,
+  timeframe: ChartTimeframe = '3m'
+): Promise<OHLCVBar[]> {
+  const config = TIMEFRAME_CONFIG[timeframe];
+  const cacheKey = `ohlcv:${symbol}:${timeframe}`;
+  const cached = getCached<OHLCVBar[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - config.days);
+
+    const result = await yahooFinance.chart(symbol, {
+      period1: startDate,
+      period2: endDate,
+      interval: config.interval,
+    });
+
+    const bars: OHLCVBar[] = result.quotes
+      .filter(q =>
+        q.date !== null &&
+        q.open !== null &&
+        q.high !== null &&
+        q.low !== null &&
+        q.close !== null &&
+        q.volume !== null
+      )
+      .map(q => ({
+        date: q.date!,
+        open: q.open!,
+        high: q.high!,
+        low: q.low!,
+        close: q.close!,
+        volume: q.volume!,
+      }));
+
+    setCache(cacheKey, bars, CACHE_TTL.historical);
+    return bars;
+  } catch {
+    return [];
+  }
+}
+
+export function timeframeToDays(timeframe: ChartTimeframe): number {
+  return TIMEFRAME_CONFIG[timeframe].days;
+}
+
+export function parseTimeframe(input: string): ChartTimeframe | null {
+  const normalized = input.toLowerCase().trim();
+  const valid: ChartTimeframe[] = ['1d', '5d', '1m', '3m', '6m', '1y', '5y'];
+  return valid.includes(normalized as ChartTimeframe) ? (normalized as ChartTimeframe) : null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Performance Returns
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -777,12 +857,12 @@ export async function fetchArticleContent(url: string): Promise<ArticleContent |
     }
 
     return {
-      title: article.title,
-      byline: article.byline,
-      content: article.content,
-      textContent: article.textContent,
-      siteName: article.siteName,
-      excerpt: article.excerpt,
+      title: article.title ?? 'Untitled',
+      byline: article.byline ?? null,
+      content: article.content ?? '',
+      textContent: article.textContent ?? '',
+      siteName: article.siteName ?? null,
+      excerpt: article.excerpt ?? null,
     };
   } catch {
     return null;

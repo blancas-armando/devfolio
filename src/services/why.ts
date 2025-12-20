@@ -5,6 +5,7 @@
 
 import Groq from 'groq-sdk';
 import { getCompanyProfile, getNewsFeed, type NewsArticle } from './market.js';
+import { extractJson } from '../utils/errors.js';
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -77,10 +78,14 @@ Be specific. If news doesn't explain it, mention broader market or sector factor
     const content = response.choices[0]?.message?.content;
     if (!content) return null;
 
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    interface WhyResponse {
+      headline?: string;
+      explanation?: string;
+      factors?: string[];
+      newsContext?: string[];
+    }
+    const parsed = extractJson<WhyResponse>(content);
+    if (!parsed) return null;
 
     return {
       symbol: upperSymbol,

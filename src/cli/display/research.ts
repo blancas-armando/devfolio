@@ -6,6 +6,7 @@
 import chalk from 'chalk';
 import type { ResearchReport } from '../../services/research.js';
 import { stripAnsi, wrapText } from '../ui.js';
+import { showHint } from '../hints.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Research Report Display
@@ -133,5 +134,6 @@ export function displayResearchReport(report: ResearchReport): void {
   console.log('');
   console.log(chalk.dim('  This report is AI-generated for informational purposes only.'));
   console.log(chalk.dim('  Not financial advice. Always do your own research.'));
+  showHint('research', report.symbol);
   console.log('');
 }

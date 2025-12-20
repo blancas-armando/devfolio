@@ -8,6 +8,7 @@ import asciichart from 'asciichart';
 import type { ETFProfile } from '../../types/index.js';
 import { formatCurrency, formatPercent } from '../../utils/format.js';
 import { stripAnsi, formatLargeNumber } from '../ui.js';
+import { showHint } from '../hints.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helpers
@@ -265,6 +266,7 @@ export function displayETFProfile(etf: ETFProfile): void {
   // Footer
   const bottom = '╰' + '─'.repeat(width - 2) + '╯';
   console.log(chalk.cyan(bottom));
+  showHint('etf', etf.symbol);
   console.log('');
 }
 

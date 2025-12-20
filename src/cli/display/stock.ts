@@ -18,6 +18,7 @@ import {
   formatPercentValue,
   drawSection,
 } from '../ui.js';
+import { showHint } from '../hints.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Company Profile Display
@@ -258,6 +259,7 @@ export function displayCompanyProfile(profile: CompanyProfile, quickTake?: Quick
   // Footer
   const bottom = '╰' + '─'.repeat(width - 2) + '╯';
   console.log(chalk.dim(bottom));
+  showHint('stock', profile.symbol);
   console.log('');
 }
 

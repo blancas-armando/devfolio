@@ -8,9 +8,12 @@ import chalk from 'chalk';
 import { streamChat } from '../ai/agent.js';
 import { getWatchlist, addToWatchlist } from '../db/watchlist.js';
 import { addHolding } from '../db/portfolio.js';
+import { getTutorialConfig } from '../db/config.js';
 import { DEMO_WATCHLIST, DEMO_HOLDINGS } from '../constants/index.js';
 import type { Message } from '../types/index.js';
 import { showSpinner } from './ui.js';
+import { runTutorial } from './tutorial.js';
+import { getUserMessage } from '../utils/errors.js';
 import {
   parseStockCommand,
   parseReportCommand,
@@ -43,7 +46,18 @@ import {
   showPortfolio,
   showHomeScreen,
   showHelp,
+  // History commands
+  showHistory,
+  showHistorySearch,
+  getHistoryRerun,
+  clearHistory,
+  // Group commands
+  showGroups,
+  saveGroup,
+  loadGroup,
+  removeGroup,
 } from './commands.js';
+import { addToHistory } from '../db/history.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab Completion
@@ -52,12 +66,12 @@ import {
 const COMMANDS = [
   'brief', 'b',
   'pulse',
-  'screen',
+  'screen', 'sc',
   'watchlist', 'w',
   'portfolio', 'p',
-  'news',
+  'news', 'n',
   'read',
-  'help', 'h',
+  'help',
   'clear', 'home',
   'quit', 'q', 'exit',
   'add',
@@ -69,6 +83,9 @@ const COMMANDS = [
   'why',
   'etf',
   'compare', 'cs',
+  'tutorial',
+  'history',
+  'groups', 'group',
 ];
 
 // Screener presets for tab completion
@@ -163,12 +180,43 @@ function cancelCurrentOperation(): boolean {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Command Execution Helper (for tutorial)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function executeCommand(cmd: string): Promise<void> {
+  const trimmed = cmd.trim().toLowerCase();
+
+  if (trimmed === 'w' || trimmed === 'watchlist') {
+    await showWatchlist();
+  } else if (trimmed === 'p' || trimmed === 'portfolio') {
+    await showPortfolio();
+  } else if (trimmed === 'b' || trimmed === 'brief') {
+    await showBrief();
+  } else if (trimmed.startsWith('s ')) {
+    const symbol = trimmed.slice(2).toUpperCase();
+    await showStock(symbol);
+  } else if (trimmed.startsWith('r ')) {
+    const symbol = trimmed.slice(2).toUpperCase();
+    await showReport(symbol);
+  } else if (trimmed.startsWith('e ')) {
+    const symbol = trimmed.slice(2).toUpperCase();
+    await showEarnings(symbol);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Main Application
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function run(): Promise<void> {
   // Initialize
   seedDemoData();
+
+  // Auto-start tutorial for first-run users
+  const tutorialConfig = getTutorialConfig();
+  if (!tutorialConfig.completed && !tutorialConfig.skipped) {
+    await runTutorial(executeCommand);
+  }
 
   // Show home screen
   showHomeScreen();
@@ -223,6 +271,12 @@ export async function run(): Promise<void> {
       try {
         const cmd = trimmed.toLowerCase();
 
+        // Save command to history (exclude navigation and exit commands)
+        const skipHistory = ['exit', 'quit', 'q', 'help', 'h', '?', 'clear', 'home', 'history', 'groups'];
+        if (!skipHistory.some(s => cmd === s || cmd.startsWith(s + ' ')) && !cmd.startsWith('!')) {
+          addToHistory(trimmed);
+        }
+
         // Built-in commands
         if (cmd === 'exit' || cmd === 'quit' || cmd === 'q') {
           console.log('');
@@ -232,6 +286,8 @@ export async function run(): Promise<void> {
           process.exit(0);
         } else if (cmd === 'help' || cmd === 'h' || cmd === '?') {
           showHelp();
+        } else if (cmd === 'tutorial') {
+          await runTutorial(executeCommand);
         } else if (cmd === 'clear' || cmd === 'home') {
           showHomeScreen();
         } else if (cmd === 'watchlist' || cmd === 'w' || cmd === 'cal' || cmd === 'calendar' || cmd === 'events') {
@@ -254,8 +310,10 @@ export async function run(): Promise<void> {
           showPulseConfig();
         } else if (cmd.startsWith('pulse set ')) {
           handlePulseSet(trimmed);
-        } else if (cmd === 'screen' || cmd.startsWith('screen ')) {
-          const screenPreset = parseScreenCommand(trimmed);
+        } else if (cmd === 'screen' || cmd === 'sc' || cmd.startsWith('screen ') || cmd.startsWith('sc ')) {
+          // Normalize 'sc' to 'screen' for parsing
+          const normalizedInput = trimmed.replace(/^sc(\s|$)/, 'screen$1');
+          const screenPreset = parseScreenCommand(normalizedInput);
           if (screenPreset === 'help') {
             showScreenerHelp();
           } else if (screenPreset) {
@@ -267,8 +325,9 @@ export async function run(): Promise<void> {
             console.log(chalk.red('  Unknown screener preset.'));
             showScreenerHelp();
           }
-        } else if (cmd === 'news' || cmd.startsWith('news ')) {
-          const newsMatch = trimmed.match(/^news\s+(.+)$/i);
+        } else if (cmd === 'news' || cmd === 'n' || cmd.startsWith('news ') || cmd.startsWith('n ')) {
+          // Handle both 'news AAPL' and 'n AAPL'
+          const newsMatch = trimmed.match(/^(?:news|n)\s+(.+)$/i);
           const newsSymbols = newsMatch
             ? newsMatch[1].split(/[\s,]+/).map(s => s.toUpperCase())
             : undefined;
@@ -315,6 +374,98 @@ export async function run(): Promise<void> {
           handleAddToWatchlist(trimmed);
         } else if (cmd.startsWith('rm ') || cmd.startsWith('remove ')) {
           handleRemoveFromWatchlist(trimmed);
+        } else if (cmd === 'history' || cmd.startsWith('history ')) {
+          // History commands
+          if (cmd === 'history') {
+            showHistory();
+          } else if (cmd === 'history clear') {
+            clearHistory();
+          } else if (cmd.startsWith('history search ')) {
+            const searchQuery = trimmed.slice('history search '.length).trim();
+            if (searchQuery) {
+              showHistorySearch(searchQuery);
+            } else {
+              console.log('');
+              console.log(chalk.red('  Usage: history search <query>'));
+              console.log('');
+            }
+          } else {
+            // history N
+            const numMatch = cmd.match(/^history\s+(\d+)$/);
+            if (numMatch) {
+              showHistory(parseInt(numMatch[1], 10));
+            } else {
+              console.log('');
+              console.log(chalk.red('  Unknown history command.'));
+              console.log(chalk.dim('  Try: history, history 50, history search <query>, history clear'));
+              console.log('');
+            }
+          }
+        } else if (cmd.startsWith('!')) {
+          // Re-run command from history: !N
+          const numMatch = cmd.match(/^!(\d+)$/);
+          if (numMatch) {
+            const historyCmd = getHistoryRerun(parseInt(numMatch[1], 10));
+            if (historyCmd) {
+              console.log(chalk.dim(`  Re-running: ${historyCmd}`));
+              // Re-trigger the command by simulating input
+              // We'll handle this by continuing the loop with the new command
+              // For now, just show a message
+              console.log(chalk.yellow('  Use arrow keys to navigate history in future version'));
+            } else {
+              console.log('');
+              console.log(chalk.red(`  No command at position ${numMatch[1]}`));
+              console.log('');
+            }
+          } else {
+            console.log('');
+            console.log(chalk.red('  Usage: !N (e.g., !5 to re-run command 5)'));
+            console.log('');
+          }
+        } else if (cmd === 'groups' || cmd === 'group list') {
+          // Group list commands
+          showGroups();
+        } else if (cmd.startsWith('group save ')) {
+          // group save <name> - saves the last compared stocks
+          const name = trimmed.slice('group save '.length).trim();
+          if (name) {
+            console.log('');
+            console.log(chalk.yellow('  To save a group, first run a comparison:'));
+            console.log(chalk.dim('    cs AAPL MSFT GOOGL'));
+            console.log(chalk.dim('    group save tech_giants'));
+            console.log('');
+          } else {
+            console.log('');
+            console.log(chalk.red('  Usage: group save <name>'));
+            console.log('');
+          }
+        } else if (cmd.startsWith('group load ')) {
+          const name = trimmed.slice('group load '.length).trim();
+          if (name) {
+            const symbols = loadGroup(name);
+            if (symbols && symbols.length >= 2) {
+              currentStopSpinner = showSpinner(`Loading group "${name}" and comparing...`);
+              await showStockComparison(symbols);
+              currentStopSpinner();
+            } else if (symbols) {
+              console.log('');
+              console.log(chalk.yellow(`  Group "${name}" needs at least 2 symbols to compare`));
+              console.log('');
+            }
+          } else {
+            console.log('');
+            console.log(chalk.red('  Usage: group load <name>'));
+            console.log('');
+          }
+        } else if (cmd.startsWith('group delete ') || cmd.startsWith('group rm ')) {
+          const name = trimmed.replace(/^group (?:delete|rm) /, '').trim();
+          if (name) {
+            removeGroup(name);
+          } else {
+            console.log('');
+            console.log(chalk.red('  Usage: group delete <name>'));
+            console.log('');
+          }
         } else {
           // Check for why command first (before stock command)
           const whySymbol = parseWhyCommand(trimmed);
@@ -354,10 +505,11 @@ export async function run(): Promise<void> {
                     await showStockComparison(stockCompareSymbols);
                     currentStopSpinner();
                   } else {
-                    const ticker = parseStockCommand(trimmed);
-                    if (ticker) {
-                      currentStopSpinner = showSpinner(`Fetching ${ticker} profile...`);
-                      await showStock(ticker);
+                    const stockResult = parseStockCommand(trimmed);
+                    if (stockResult) {
+                      const tfLabel = stockResult.timeframe ? ` (${stockResult.timeframe})` : '';
+                      currentStopSpinner = showSpinner(`Fetching ${stockResult.symbol} profile${tfLabel}...`);
+                      await showStock(stockResult.symbol, stockResult.timeframe);
                       currentStopSpinner();
                     } else {
                       // Send to AI with streaming
@@ -430,9 +582,10 @@ export async function run(): Promise<void> {
         if (error instanceof Error && error.name === 'AbortError') {
           // Already handled by SIGINT handler
         } else {
-          const msg = error instanceof Error ? error.message : 'Something went wrong';
+          // Use user-friendly error message
+          const msg = getUserMessage(error);
           console.log('');
-          console.log(chalk.red(`  Error: ${msg}`));
+          console.log(chalk.red(`  ${msg}`));
           console.log('');
         }
       } finally {

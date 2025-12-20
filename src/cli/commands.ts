@@ -16,6 +16,7 @@ import { getMarketPulse } from '../services/pulse.js';
 import { runScreener, getAvailablePresets, getRelatedStocks, type ScreenerPreset } from '../services/screener.js';
 import { addToWatchlist, removeFromWatchlist } from '../db/watchlist.js';
 import { getPulseConfig, updatePulseConfig, type PulseConfig } from '../db/config.js';
+import { ErrorMessages } from '../utils/errors.js';
 import {
   displayCompanyProfile,
   displayStockComparison,
@@ -39,15 +40,22 @@ import {
   showHomeScreen,
   showHelp,
 } from './display/index.js';
+import { displayActionableError } from './ui.js';
 import { getLastNewsArticles, getLastFilings, getLastFilingsSymbol } from './state.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Command Parsers
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function parseStockCommand(input: string): string | null {
-  const stockMatch = input.match(/^(?:s|stock)\s+([A-Za-z]{1,5})$/i);
-  if (stockMatch) return stockMatch[1].toUpperCase();
+export function parseStockCommand(input: string): { symbol: string; timeframe?: string } | null {
+  // Match: s AAPL, s AAPL 1y, stock MSFT 3m
+  const stockMatch = input.match(/^(?:s|stock)\s+([A-Za-z]{1,5})(?:\s+(1d|5d|1m|3m|6m|1y|5y))?$/i);
+  if (stockMatch) {
+    return {
+      symbol: stockMatch[1].toUpperCase(),
+      timeframe: stockMatch[2]?.toLowerCase(),
+    };
+  }
   return null;
 }
 
@@ -101,17 +109,25 @@ export function parseWhyCommand(input: string): string | null {
 // Command Handlers
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function showStock(symbol: string): Promise<void> {
+export async function showStock(symbol: string, timeframe?: string): Promise<void> {
   const upperSymbol = symbol.toUpperCase();
 
   // Fetch profile first
   const profile = await getCompanyProfile(upperSymbol);
 
   if (!profile) {
-    console.log('');
-    console.log(chalk.red(`  Error: Could not find company: ${upperSymbol}`));
-    console.log(chalk.dim(`    Try a valid ticker symbol like AAPL, MSFT, or NVDA`));
-    console.log('');
+    displayActionableError({
+      message: ErrorMessages.symbolNotFound(upperSymbol),
+      suggestions: [
+        'Check the ticker symbol for typos',
+        'Some tickers use periods (e.g., BRK.B)',
+        'The stock may be delisted or too new',
+      ],
+      tryCommands: [
+        'screen gainers',
+        'screen tech',
+      ],
+    });
     return;
   }
 
@@ -121,6 +137,7 @@ export async function showStock(symbol: string): Promise<void> {
     getRelatedStocks(upperSymbol),
   ]);
 
+  // Note: timeframe will be used when displayCompanyProfile is extended to support it
   displayCompanyProfile(profile, quickTake, relatedStocks);
 }
 
@@ -128,10 +145,17 @@ export async function showStockComparison(symbols: string[]): Promise<void> {
   const profiles = await compareStocks(symbols.map(s => s.toUpperCase()));
 
   if (profiles.length === 0) {
-    console.log('');
-    console.log(chalk.red(`  Error: Could not find any of the specified stocks`));
-    console.log(chalk.dim(`    Try valid stock symbols like AAPL, MSFT, or GOOGL`));
-    console.log('');
+    displayActionableError({
+      message: 'Could not find any of the specified stocks',
+      suggestions: [
+        'Check the ticker symbols for typos',
+        'Make sure to use valid stock symbols',
+      ],
+      tryCommands: [
+        'cs AAPL MSFT GOOGL',
+        'compare SPY QQQ',
+      ],
+    });
     return;
   }
 
@@ -163,8 +187,8 @@ export async function showReport(symbol: string): Promise<void> {
 
   if (!report) {
     console.log('');
-    console.log(chalk.red(`  Error: Could not generate report for: ${symbol.toUpperCase()}`));
-    console.log(chalk.dim(`    Try a valid ticker symbol like AAPL, MSFT, or NVDA`));
+    console.log(chalk.red(`  ${ErrorMessages.researchUnavailable(symbol.toUpperCase())}`));
+    console.log(chalk.dim('    Check the symbol is valid and try again.'));
     console.log('');
     return;
   }
@@ -177,8 +201,8 @@ export async function showEarnings(symbol: string): Promise<void> {
 
   if (!report) {
     console.log('');
-    console.log(chalk.red(`  Error: Could not generate earnings report for: ${symbol.toUpperCase()}`));
-    console.log(chalk.dim(`    Try a valid ticker symbol like AAPL, MSFT, or NVDA`));
+    console.log(chalk.red(`  ${ErrorMessages.earningsUnavailable(symbol.toUpperCase())}`));
+    console.log(chalk.dim('    This company may not have recent earnings data.'));
     console.log('');
     return;
   }
@@ -190,10 +214,18 @@ export async function showETF(symbol: string): Promise<void> {
   const etf = await getETFProfile(symbol.toUpperCase());
 
   if (!etf) {
-    console.log('');
-    console.log(chalk.red(`  Error: Could not find ETF: ${symbol.toUpperCase()}`));
-    console.log(chalk.dim(`    Try a valid ETF symbol like VTI, SPY, or QQQ`));
-    console.log('');
+    displayActionableError({
+      message: `Could not find ETF "${symbol.toUpperCase()}"`,
+      suggestions: [
+        'Check the ticker symbol for typos',
+        'Make sure this is an ETF, not a stock',
+      ],
+      tryCommands: [
+        'etf SPY',
+        'etf QQQ',
+        'etf VTI',
+      ],
+    });
     return;
   }
 
@@ -204,10 +236,17 @@ export async function showETFComparison(symbols: string[]): Promise<void> {
   const etfs = await compareETFs(symbols.map(s => s.toUpperCase()));
 
   if (etfs.length === 0) {
-    console.log('');
-    console.log(chalk.red(`  Error: Could not find any of the specified ETFs`));
-    console.log(chalk.dim(`    Try valid ETF symbols like VTI, SPY, or QQQ`));
-    console.log('');
+    displayActionableError({
+      message: 'Could not find any of the specified ETFs',
+      suggestions: [
+        'Check the ticker symbols for typos',
+        'Make sure these are ETFs, not stocks',
+      ],
+      tryCommands: [
+        'compare VTI SPY',
+        'compare QQQ IWM',
+      ],
+    });
     return;
   }
 
@@ -260,8 +299,8 @@ export async function showWhy(symbol: string): Promise<void> {
 
   if (!explanation) {
     console.log('');
-    console.log(chalk.red(`  Error: Could not analyze ${symbol.toUpperCase()}`));
-    console.log(chalk.dim(`    Make sure GROQ_API_KEY is set and the symbol is valid`));
+    console.log(chalk.red(`  Could not analyze movement for ${symbol.toUpperCase()}.`));
+    console.log(chalk.dim('    The stock may not have significant recent activity.'));
     console.log('');
     return;
   }
@@ -477,6 +516,151 @@ export async function showScreener(preset: ScreenerPreset): Promise<void> {
 export function showScreenerHelp(): void {
   const presets = getAvailablePresets();
   displayScreenerPresets(presets);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// History Commands
+// ═══════════════════════════════════════════════════════════════════════════
+
+import { getHistory, searchHistory, getHistoryCommand, clearOldHistory } from '../db/history.js';
+import { getAllGroups, getGroup, createGroup, deleteGroup, type ComparisonGroup } from '../db/groups.js';
+import { drawBox, WIDTH } from './ui.js';
+
+export function showHistory(limit: number = 20): void {
+  const history = getHistory(limit);
+
+  if (history.length === 0) {
+    console.log('');
+    console.log(chalk.dim('  No command history yet. Start using commands!'));
+    console.log('');
+    return;
+  }
+
+  console.log('');
+  const lines: string[] = [];
+  lines.push(chalk.dim('  #   Command'));
+  lines.push(chalk.dim('  ' + '─'.repeat(52)));
+
+  for (const [idx, entry] of history.entries()) {
+    const num = chalk.cyan(`${(idx + 1).toString().padStart(3)}`);
+    const cmd = entry.command.length > 45
+      ? entry.command.slice(0, 42) + '...'
+      : entry.command;
+    lines.push(`  ${num}  ${chalk.white(cmd)}`);
+  }
+
+  drawBox('Command History', lines, WIDTH.COMPACT);
+
+  console.log('');
+  console.log(chalk.dim('  Tip: Use "!N" to re-run command N (e.g., "!3")'));
+  console.log('');
+}
+
+export function showHistorySearch(query: string): void {
+  const results = searchHistory(query);
+
+  if (results.length === 0) {
+    console.log('');
+    console.log(chalk.dim(`  No commands matching "${query}"`));
+    console.log('');
+    return;
+  }
+
+  console.log('');
+  console.log(chalk.cyan(`  Commands matching "${query}":`));
+  console.log('');
+
+  for (const [idx, entry] of results.entries()) {
+    const num = chalk.dim(`${(idx + 1).toString().padStart(3)}.`);
+    console.log(`  ${num} ${chalk.white(entry.command)}`);
+  }
+
+  console.log('');
+}
+
+export function getHistoryRerun(num: number): string | null {
+  return getHistoryCommand(num);
+}
+
+export function clearHistory(): void {
+  const deleted = clearOldHistory(0); // Clear all
+  console.log('');
+  console.log(chalk.green(`  Cleared ${deleted} history entries`));
+  console.log('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Group Commands
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function showGroups(): void {
+  const groups = getAllGroups();
+
+  if (groups.length === 0) {
+    console.log('');
+    console.log(chalk.cyan('  No saved comparison groups'));
+    console.log('');
+    console.log(chalk.dim('  Save a group after comparing stocks:'));
+    console.log(chalk.yellow('    cs AAPL MSFT GOOGL'));
+    console.log(chalk.yellow('    group save tech-leaders'));
+    console.log('');
+    return;
+  }
+
+  console.log('');
+  const lines: string[] = [];
+
+  for (const group of groups) {
+    const name = chalk.cyan(group.name.padEnd(18));
+    const members = chalk.white(group.members.join(' '));
+    const type = chalk.dim(`(${group.type})`);
+    lines.push(`${name} ${members} ${type}`);
+  }
+
+  drawBox('Saved Groups', lines, WIDTH.STANDARD);
+
+  console.log('');
+  console.log(chalk.dim('  Load a group with: ') + chalk.yellow('group load <name>'));
+  console.log('');
+}
+
+export function saveGroup(name: string, symbols: string[], type: 'stocks' | 'etfs' = 'stocks'): void {
+  try {
+    createGroup(name, symbols, type);
+    console.log('');
+    console.log(chalk.green(`  Saved group "${name}" with ${symbols.length} symbols`));
+    console.log('');
+  } catch {
+    console.log('');
+    console.log(chalk.red(`  Error: Could not save group "${name}"`));
+    console.log(chalk.dim('    A group with this name may already exist.'));
+    console.log('');
+  }
+}
+
+export function loadGroup(name: string): string[] | null {
+  const group = getGroup(name);
+  return group?.members ?? null;
+}
+
+export function removeGroup(name: string): void {
+  const deleted = deleteGroup(name);
+
+  if (deleted) {
+    console.log('');
+    console.log(chalk.green(`  Deleted group "${name}"`));
+    console.log('');
+  } else {
+    displayActionableError({
+      message: `Group "${name}" not found`,
+      suggestions: [
+        'Check the group name for typos',
+      ],
+      tryCommands: [
+        'groups',
+      ],
+    });
+  }
 }
 
 // Re-export display functions that can be used directly

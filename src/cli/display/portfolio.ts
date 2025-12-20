@@ -9,6 +9,7 @@ import { drawBox, stripAnsi } from '../ui.js';
 import { getWatchlist } from '../../db/watchlist.js';
 import { getPortfolio } from '../../db/portfolio.js';
 import { getQuotes, getEventsCalendar } from '../../services/market.js';
+import { showHint } from '../hints.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Watchlist Display
@@ -19,7 +20,15 @@ export async function showWatchlist(): Promise<void> {
 
   if (symbols.length === 0) {
     console.log('');
-    console.log(chalk.dim('  Watchlist is empty. Try "add AAPL" to add stocks.'));
+    console.log(chalk.cyan('  Your watchlist is empty'));
+    console.log('');
+    console.log(chalk.dim('  Get started:'));
+    console.log(chalk.yellow('    add AAPL      ') + chalk.dim('Add Apple to your watchlist'));
+    console.log(chalk.yellow('    add MSFT GOOGL') + chalk.dim('Add multiple stocks at once'));
+    console.log('');
+    console.log(chalk.dim('  Or explore the market:'));
+    console.log(chalk.yellow('    screen gainers') + chalk.dim('See today\'s top gainers'));
+    console.log(chalk.yellow('    b             ') + chalk.dim('Get an AI market brief'));
     console.log('');
     return;
   }
@@ -71,6 +80,7 @@ export async function showWatchlist(): Promise<void> {
   }
 
   drawBox('Watchlist', lines, 58);
+  showHint('watchlist');
   console.log('');
 }
 
@@ -83,7 +93,14 @@ export async function showPortfolio(): Promise<void> {
 
   if (portfolio.holdings.length === 0) {
     console.log('');
-    console.log(chalk.dim('  Portfolio is empty. Try "buy 10 shares of AAPL at 150"'));
+    console.log(chalk.cyan('  Your portfolio is empty'));
+    console.log('');
+    console.log(chalk.dim('  To track holdings, use natural language:'));
+    console.log(chalk.yellow('    "bought 10 AAPL at 150"'));
+    console.log(chalk.yellow('    "add 5 shares of MSFT at $420"'));
+    console.log('');
+    console.log(chalk.dim('  Or just track stocks without cost basis:'));
+    console.log(chalk.yellow('    w             ') + chalk.dim('Use your watchlist instead'));
     console.log('');
     return;
   }
@@ -111,5 +128,6 @@ export async function showPortfolio(): Promise<void> {
   }
 
   drawBox('Portfolio', lines, 58);
+  showHint('portfolio');
   console.log('');
 }

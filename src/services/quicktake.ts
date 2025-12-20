@@ -5,6 +5,7 @@
 
 import Groq from 'groq-sdk';
 import type { CompanyProfile } from './market.js';
+import { extractJson } from '../utils/errors.js';
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -89,10 +90,14 @@ Be specific and use actual numbers. No generic statements.`;
     const content = response.choices[0]?.message?.content;
     if (!content) return null;
 
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
+    interface QuickTakeResponse {
+      sentiment?: 'bullish' | 'bearish' | 'neutral';
+      summary?: string;
+      keyPoint?: string;
+    }
+    const parsed = extractJson<QuickTakeResponse>(content);
+    if (!parsed) return null;
 
-    const parsed = JSON.parse(jsonMatch[0]);
     return {
       sentiment: parsed.sentiment || 'neutral',
       summary: parsed.summary || '',
