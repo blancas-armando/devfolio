@@ -22,6 +22,15 @@ import { getMarketBrief, type MarketBrief } from './services/brief.js';
 import { generateResearchReport, type ResearchReport } from './services/research.js';
 import { generateEarningsReport, type EarningsReport, type QuarterlyResults, type KPIMetric, type GuidanceMetric } from './services/earnings.js';
 import { getETFProfile, compareETFs } from './services/etf.js';
+import {
+  getRecentFilings,
+  getFilingText,
+  extractKeySections,
+  identify8KItems,
+  getCompanyInfo,
+  type SECFiling,
+  type FilingSection,
+} from './services/sec.js';
 import type { ETFProfile } from './types/index.js';
 import { formatCurrency, formatPercent } from './utils/format.js';
 import { DEMO_WATCHLIST, DEMO_HOLDINGS } from './constants/index.js';
@@ -29,6 +38,10 @@ import type { Message } from './types/index.js';
 
 // Store last news articles for "read N" command
 let lastNewsArticles: NewsArticle[] = [];
+
+// Store last SEC filings for "filing N" command
+let lastFilings: SECFiling[] = [];
+let lastFilingsSymbol: string = '';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ASCII Art & Branding
@@ -806,6 +819,177 @@ function displayNewsFeed(articles: NewsArticle[], forSymbols?: string[]): void {
   console.log(chalk.cyan('│') + ' ' + hint + ' '.repeat(Math.max(0, innerWidth - stripAnsi(hint).length)) + ' ' + chalk.cyan('│'));
 
   console.log(chalk.cyan('╰' + '─'.repeat(width - 2) + '╯'));
+  console.log('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEC Filings Display
+// ═══════════════════════════════════════════════════════════════════════════
+
+function displayFilings(filings: SECFiling[], symbol: string): void {
+  const width = 74;
+  const innerWidth = width - 4;
+
+  // Store filings for "filing N" command
+  lastFilings = filings.slice(0, 15);
+  lastFilingsSymbol = symbol.toUpperCase();
+
+  console.log('');
+  console.log(chalk.magenta('╭' + '─'.repeat(width - 2) + '╮'));
+
+  // Title
+  const title = `SEC Filings: ${symbol.toUpperCase()}`;
+  const titlePad = Math.max(0, innerWidth - title.length);
+  console.log(chalk.magenta('│') + ' ' + chalk.bold.white(title) + ' '.repeat(titlePad) + ' ' + chalk.magenta('│'));
+  console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
+
+  if (filings.length === 0) {
+    const noFilings = chalk.dim('No recent filings found');
+    console.log(chalk.magenta('│') + ' ' + noFilings + ' '.repeat(Math.max(0, innerWidth - stripAnsi(noFilings).length)) + ' ' + chalk.magenta('│'));
+  } else {
+    filings.slice(0, 15).forEach((filing, index) => {
+      // Form type with color coding
+      const formColor = filing.form === '10-K' ? chalk.cyan :
+                        filing.form === '10-Q' ? chalk.blue :
+                        filing.form === '8-K' ? chalk.yellow : chalk.white;
+
+      // Filing number
+      const numStr = chalk.magenta(`[${(index + 1).toString().padStart(2)}]`);
+
+      // Form and date
+      const formStr = formColor(filing.form.padEnd(6));
+      const dateStr = chalk.dim(filing.filingDate);
+
+      // Description (truncated)
+      const maxDescLen = innerWidth - 22;
+      const desc = filing.description.length > maxDescLen
+        ? filing.description.slice(0, maxDescLen - 3) + '...'
+        : filing.description;
+
+      const line = `${numStr} ${formStr} ${dateStr}  ${chalk.white(desc)}`;
+      const lineStripped = stripAnsi(line);
+      const linePadding = Math.max(0, innerWidth - lineStripped.length);
+      console.log(chalk.magenta('│') + ' ' + line + ' '.repeat(linePadding) + ' ' + chalk.magenta('│'));
+    });
+  }
+
+  // Footer with hint
+  console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
+  const hint = chalk.dim('Type "filing N" to read filing (e.g., filing 1)');
+  console.log(chalk.magenta('│') + ' ' + hint + ' '.repeat(Math.max(0, innerWidth - stripAnsi(hint).length)) + ' ' + chalk.magenta('│'));
+
+  console.log(chalk.magenta('╰' + '─'.repeat(width - 2) + '╯'));
+  console.log('');
+}
+
+async function displayFiling(filing: SECFiling, symbol: string): Promise<void> {
+  const width = 78;
+  const innerWidth = width - 4;
+
+  console.log('');
+  console.log(chalk.magenta('╭' + '─'.repeat(width - 2) + '╮'));
+
+  // Header
+  const formColor = filing.form === '10-K' ? chalk.cyan :
+                    filing.form === '10-Q' ? chalk.blue :
+                    filing.form === '8-K' ? chalk.yellow : chalk.white;
+
+  const title = `${symbol.toUpperCase()} - ${filing.form}`;
+  const titlePad = Math.max(0, innerWidth - title.length);
+  console.log(chalk.magenta('│') + ' ' + chalk.bold.white(title) + ' '.repeat(titlePad) + ' ' + chalk.magenta('│'));
+
+  // Filing meta
+  const meta = `Filed: ${filing.filingDate} | Report Date: ${filing.reportDate}`;
+  console.log(chalk.magenta('│') + ' ' + chalk.dim(meta) + ' '.repeat(Math.max(0, innerWidth - meta.length)) + ' ' + chalk.magenta('│'));
+
+  console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
+
+  // Description
+  const descLabel = chalk.bold.yellow('Description');
+  console.log(chalk.magenta('│') + ' ' + descLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(descLabel).length)) + ' ' + chalk.magenta('│'));
+
+  const descLines = wrapText(filing.description, innerWidth - 2);
+  for (const line of descLines) {
+    console.log(chalk.magenta('│') + ' ' + chalk.white(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
+  }
+
+  console.log(chalk.magenta('│') + ' '.repeat(innerWidth) + ' ' + chalk.magenta('│'));
+
+  // Fetch and parse the filing content
+  const text = await getFilingText(filing, 80000);
+
+  if (!text) {
+    const errorMsg = chalk.red('Could not fetch filing content');
+    console.log(chalk.magenta('│') + ' ' + errorMsg + ' '.repeat(Math.max(0, innerWidth - stripAnsi(errorMsg).length)) + ' ' + chalk.magenta('│'));
+  } else {
+    // For 8-K filings, identify the event types
+    if (filing.form === '8-K') {
+      const items = identify8KItems(text);
+      if (items.length > 0) {
+        console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
+        const eventsLabel = chalk.bold.yellow('Event Types');
+        console.log(chalk.magenta('│') + ' ' + eventsLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(eventsLabel).length)) + ' ' + chalk.magenta('│'));
+
+        for (const item of items.slice(0, 5)) {
+          const itemLine = `• ${item}`;
+          const truncItem = itemLine.length > innerWidth - 2 ? itemLine.slice(0, innerWidth - 5) + '...' : itemLine;
+          console.log(chalk.magenta('│') + ' ' + chalk.white(truncItem) + ' '.repeat(Math.max(0, innerWidth - truncItem.length)) + ' ' + chalk.magenta('│'));
+        }
+      }
+    }
+
+    // Extract key sections for 10-K/10-Q
+    const sections = extractKeySections(text);
+    if (sections.length > 0) {
+      for (const section of sections.slice(0, 3)) {
+        console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
+        const sectionLabel = chalk.bold.yellow(section.title);
+        console.log(chalk.magenta('│') + ' ' + sectionLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(sectionLabel).length)) + ' ' + chalk.magenta('│'));
+        console.log(chalk.magenta('│') + ' '.repeat(innerWidth) + ' ' + chalk.magenta('│'));
+
+        // Clean and wrap content
+        const cleanContent = section.content
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 800);
+
+        const contentLines = wrapText(cleanContent, innerWidth - 2);
+        for (const line of contentLines.slice(0, 12)) {
+          console.log(chalk.magenta('│') + ' ' + chalk.dim(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
+        }
+        if (contentLines.length > 12) {
+          console.log(chalk.magenta('│') + ' ' + chalk.dim('...') + ' '.repeat(innerWidth - 3) + ' ' + chalk.magenta('│'));
+        }
+      }
+    } else {
+      // If no sections extracted, show raw text excerpt
+      console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
+      const excerptLabel = chalk.bold.yellow('Filing Excerpt');
+      console.log(chalk.magenta('│') + ' ' + excerptLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(excerptLabel).length)) + ' ' + chalk.magenta('│'));
+      console.log(chalk.magenta('│') + ' '.repeat(innerWidth) + ' ' + chalk.magenta('│'));
+
+      const excerpt = text.slice(0, 1500).replace(/\s+/g, ' ').trim();
+      const excerptLines = wrapText(excerpt, innerWidth - 2);
+      for (const line of excerptLines.slice(0, 20)) {
+        console.log(chalk.magenta('│') + ' ' + chalk.dim(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
+      }
+      if (excerptLines.length > 20) {
+        console.log(chalk.magenta('│') + ' ' + chalk.dim('...') + ' '.repeat(innerWidth - 3) + ' ' + chalk.magenta('│'));
+      }
+    }
+  }
+
+  // Footer with link
+  console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
+  const linkLabel = 'Full document: ';
+  const maxUrlLen = innerWidth - linkLabel.length - 2;
+  const truncUrl = filing.fileUrl.length > maxUrlLen
+    ? filing.fileUrl.slice(0, maxUrlLen - 3) + '...'
+    : filing.fileUrl;
+  const linkLine = chalk.dim(linkLabel) + chalk.blue.underline(truncUrl);
+  console.log(chalk.magenta('│') + ' ' + linkLine + ' '.repeat(Math.max(0, innerWidth - stripAnsi(linkLine).length)) + ' ' + chalk.magenta('│'));
+
+  console.log(chalk.magenta('╰' + '─'.repeat(width - 2) + '╯'));
   console.log('');
 }
 
@@ -2043,6 +2227,8 @@ function showHelp(): void {
     `${chalk.yellow('cal')}, ${chalk.yellow('events')}        ${chalk.dim('-')} Upcoming earnings & dividends`,
     `${chalk.yellow('news')} ${chalk.dim('[SYM]')}         ${chalk.dim('-')} Market news or stock-specific news`,
     `${chalk.yellow('read <N>')}           ${chalk.dim('-')} Read news article N`,
+    `${chalk.yellow('filings <SYM>')}      ${chalk.dim('-')} SEC filings (10-K, 10-Q, 8-K)`,
+    `${chalk.yellow('filing <N>')}         ${chalk.dim('-')} Read SEC filing N`,
     `${chalk.yellow('clear')}, ${chalk.yellow('home')}        ${chalk.dim('-')} Clear screen and show home`,
     `${chalk.yellow('?')}, ${chalk.yellow('help')}            ${chalk.dim('-')} Show this help`,
     `${chalk.yellow('q')}, ${chalk.yellow('quit')}            ${chalk.dim('-')} Exit DevFolio`,
@@ -2079,6 +2265,13 @@ function showHelp(): void {
   console.log(chalk.dim('    - FY guidance with raised/lowered/maintained status'));
   console.log(chalk.dim('    - Recent 10-K, 10-Q, 8-K SEC filings'));
   console.log(chalk.dim('    - AI-generated earnings analysis & outlook'));
+  console.log('');
+  console.log(chalk.bold.cyan('  SEC Filings'));
+  console.log(chalk.dim('  The "filings" command shows recent SEC filings:'));
+  console.log(chalk.dim('    - 10-K: Annual reports with business overview & financials'));
+  console.log(chalk.dim('    - 10-Q: Quarterly reports with interim financials'));
+  console.log(chalk.dim('    - 8-K: Material events (earnings, acquisitions, changes)'));
+  console.log(chalk.dim('  Use "filing N" to read key sections from any filing.'));
   console.log('');
   console.log(chalk.bold.cyan('  Natural Language'));
   console.log(chalk.dim('  You can also ask naturally:'));
@@ -2366,6 +2559,52 @@ export async function run(): Promise<void> {
           } else {
             console.log('');
             console.log(chalk.red('  Usage: read <number> (e.g., read 1)'));
+            console.log('');
+          }
+        } else if (cmd.startsWith('filings ') || cmd.startsWith('sec ')) {
+          // List SEC filings for a symbol
+          const filingsMatch = trimmed.match(/^(?:filings|sec)\s+([A-Za-z]{1,5})$/i);
+          if (filingsMatch) {
+            const symbol = filingsMatch[1].toUpperCase();
+            const stop = showSpinner(`Fetching SEC filings for ${symbol}...`);
+            const filings = await getRecentFilings(symbol, ['10-K', '10-Q', '8-K'], 15);
+            stop();
+
+            if (filings.length === 0) {
+              console.log('');
+              console.log(chalk.yellow(`  No SEC filings found for ${symbol}`));
+              console.log(chalk.dim('  This symbol may not be a US-listed company.'));
+              console.log('');
+            } else {
+              displayFilings(filings, symbol);
+            }
+          } else {
+            console.log('');
+            console.log(chalk.red('  Usage: filings <symbol> (e.g., filings AAPL)'));
+            console.log('');
+          }
+        } else if (cmd.startsWith('filing ')) {
+          // Read a specific filing
+          const filingMatch = trimmed.match(/^filing\s+(\d+)$/i);
+          if (filingMatch) {
+            const filingNum = parseInt(filingMatch[1], 10);
+            if (lastFilings.length === 0) {
+              console.log('');
+              console.log(chalk.yellow('  No filings loaded. Run "filings <symbol>" first.'));
+              console.log('');
+            } else if (filingNum >= 1 && filingNum <= lastFilings.length) {
+              const filing = lastFilings[filingNum - 1];
+              const stop = showSpinner(`Fetching ${filing.form} filing...`);
+              await displayFiling(filing, lastFilingsSymbol);
+              stop();
+            } else {
+              console.log('');
+              console.log(chalk.red(`  Invalid filing number. Use 1-${lastFilings.length}`));
+              console.log('');
+            }
+          } else {
+            console.log('');
+            console.log(chalk.red('  Usage: filing <number> (e.g., filing 1)'));
             console.log('');
           }
         } else {
