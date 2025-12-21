@@ -81,3 +81,44 @@ export function truncate(str: string, length: number): string {
   if (str.length <= length) return str;
   return str.slice(0, length - 1) + '…';
 }
+
+/**
+ * Format a large number with K/M/B/T suffix
+ */
+export function formatLargeNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined) return 'N/A';
+
+  const absValue = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+
+  if (absValue >= 1_000_000_000_000) {
+    return `${sign}${(absValue / 1_000_000_000_000).toFixed(2)}T`;
+  }
+  if (absValue >= 1_000_000_000) {
+    return `${sign}${(absValue / 1_000_000_000).toFixed(2)}B`;
+  }
+  if (absValue >= 1_000_000) {
+    return `${sign}${(absValue / 1_000_000).toFixed(2)}M`;
+  }
+  if (absValue >= 1_000) {
+    return `${sign}${(absValue / 1_000).toFixed(2)}K`;
+  }
+  return `${sign}${absValue.toFixed(2)}`;
+}
+
+/**
+ * Format a ratio (P/E, P/B, etc.) with 2 decimal places
+ */
+export function formatRatio(value: number | null | undefined): string {
+  if (value === null || value === undefined) return 'N/A';
+  return value.toFixed(2);
+}
+
+/**
+ * Format a percentage value (already in percent form)
+ */
+export function formatPercentValue(value: number | null | undefined): string {
+  if (value === null || value === undefined) return 'N/A';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(2)}%`;
+}
