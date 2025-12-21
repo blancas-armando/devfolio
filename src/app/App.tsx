@@ -20,8 +20,14 @@ import { addToHistory } from '../db/history.js';
 
 // New React view components
 import { HelpScreen } from '../views/screens/HelpScreen.js';
+import { MarketBriefView } from '../views/market/MarketBrief.js';
+import { MarketPulseView } from '../views/market/MarketPulse.js';
 
-// Command handlers from existing CLI
+// Data services
+import { getMarketBrief } from '../services/brief.js';
+import { getMarketPulse } from '../services/pulse.js';
+
+// Command handlers from existing CLI (legacy - being migrated to React components)
 import {
   parseStockCommand,
   parseReportCommand,
@@ -34,7 +40,6 @@ import {
   parseScreenCommand,
   showStock,
   showStockComparison,
-  showBrief,
   showNews,
   showReport,
   showEarnings,
@@ -44,7 +49,6 @@ import {
   showFilingContent,
   showWhy,
   showFinancials,
-  showPulse,
   showPulseConfig,
   handlePulseSet,
   showScreener,
@@ -241,7 +245,21 @@ async function routeCommand(
 
   // Brief
   if (cmd === 'b' || cmd === 'brief') {
-    await showBrief();
+    dispatch({ type: 'START_PROCESSING', operation: 'Loading market brief...' });
+    try {
+      const brief = await getMarketBrief();
+      dispatch({
+        type: 'APPEND_OUTPUT',
+        block: createComponentBlock(<MarketBriefView brief={brief} />, 'Market Brief'),
+      });
+    } catch (error) {
+      dispatch({
+        type: 'APPEND_OUTPUT',
+        block: createErrorBlock('Failed to load market brief', ['Check your network connection']),
+      });
+    } finally {
+      dispatch({ type: 'STOP_PROCESSING' });
+    }
     return;
   }
 
@@ -252,7 +270,21 @@ async function routeCommand(
     } else if (parts[1] === 'set') {
       await handlePulseSet(parts.slice(2).join(' '));
     } else {
-      await showPulse();
+      dispatch({ type: 'START_PROCESSING', operation: 'Loading market pulse...' });
+      try {
+        const pulse = await getMarketPulse();
+        dispatch({
+          type: 'APPEND_OUTPUT',
+          block: createComponentBlock(<MarketPulseView pulse={pulse} />, 'Market Pulse'),
+        });
+      } catch (error) {
+        dispatch({
+          type: 'APPEND_OUTPUT',
+          block: createErrorBlock('Failed to load market pulse', ['Check your network connection']),
+        });
+      } finally {
+        dispatch({ type: 'STOP_PROCESSING' });
+      }
     }
     return;
   }
