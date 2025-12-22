@@ -36,6 +36,7 @@ import { FinancialsView } from '../views/research/FinancialsView.js';
 import { HistoryView } from '../views/research/HistoryView.js';
 import { ETFProfileView } from '../views/etf/ETFProfile.js';
 import { ETFComparisonView } from '../views/etf/ETFComparison.js';
+import { LiveModeView } from '../views/market/LiveMode.js';
 
 // Data Services
 import { getMarketBrief } from '../services/brief.js';
@@ -75,12 +76,21 @@ let lastNewsArticles: Array<{ title: string; link: string; publisher: string; pu
 let lastFilings: Array<{ symbol: string; type: string; date: string; url: string; description?: string }> = [];
 let lastFilingsSymbol = '';
 
+// Track last refreshable command for 'r' shortcut
+let lastRefreshableCommand = '';
+
+// Commands that can be refreshed (data that changes over time)
+const REFRESHABLE_COMMANDS = ['s', 'stock', 'w', 'watchlist', 'p', 'portfolio', 'pulse', 'b', 'brief', 'news', 'screen'];
+
 const isTTY = process.stdin.isTTY ?? false;
 
 function AppInner(): React.ReactElement {
   const { state, dispatch } = useAppState();
   const { exit } = useApp();
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+
+  // Track if we should handle the 'r' key for refresh
+  const [pendingRefresh, setPendingRefresh] = useState(false);
 
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
@@ -95,7 +105,23 @@ function AppInner(): React.ReactElement {
     if (key.ctrl && input === 'l') {
       dispatch({ type: 'CLEAR_OUTPUT' });
     }
+    // Ctrl+R to refresh last command
+    if (key.ctrl && input === 'r' && !state.processing.isProcessing) {
+      if (lastRefreshableCommand) {
+        setPendingRefresh(true);
+      } else {
+        dispatch({ type: 'APPEND_OUTPUT', block: createTextBlock('No command to refresh. Run a command first (e.g., s AAPL)', 'warning') });
+      }
+    }
   }, { isActive: isTTY });
+
+  // Handle pending refresh outside of useInput to avoid async issues
+  React.useEffect(() => {
+    if (pendingRefresh && lastRefreshableCommand) {
+      setPendingRefresh(false);
+      handleSubmit(lastRefreshableCommand);
+    }
+  }, [pendingRefresh]);
 
   const handleSubmit = useCallback(async (command: string) => {
     const trimmed = command.trim();
@@ -153,6 +179,11 @@ async function routeCommand(command: string, dispatch: React.Dispatch<any>): Pro
   const originalCommand = command.trim();
   const parts = trimmed.split(/\s+/);
   const cmd = parts[0];
+
+  // Track refreshable commands for 'r' shortcut
+  if (REFRESHABLE_COMMANDS.includes(cmd)) {
+    lastRefreshableCommand = originalCommand;
+  }
 
   // Utility commands
   if (cmd === 'clear' || cmd === 'home') {
@@ -594,19 +625,37 @@ async function routeCommand(command: string, dispatch: React.Dispatch<any>): Pro
 
   // Live mode command
   if (cmd === 'live') {
+    // Get symbols from command or default to watchlist
+    let symbols: string[] = parts.slice(1).map(s => s.toUpperCase());
+
+    if (symbols.length === 0) {
+      // Use watchlist symbols (getWatchlist returns string[])
+      symbols = getWatchlist();
+    }
+
+    if (symbols.length === 0) {
+      dispatch({
+        type: 'APPEND_OUTPUT',
+        block: createTextBlock(
+          'Live Mode\n' +
+          '─'.repeat(40) + '\n\n' +
+          'No symbols specified and watchlist is empty.\n\n' +
+          'Usage:\n' +
+          '  live              Live mode for watchlist symbols\n' +
+          '  live AAPL NVDA    Live mode for specific symbols\n\n' +
+          'Add symbols to your watchlist first: add AAPL',
+          'warning'
+        ),
+      });
+      return;
+    }
+
+    // Track as refreshable command
+    lastRefreshableCommand = originalCommand;
+
     dispatch({
       type: 'APPEND_OUTPUT',
-      block: createTextBlock(
-        'Live Mode\n' +
-        '─'.repeat(40) + '\n\n' +
-        'Live mode provides 10-second quote refresh.\n' +
-        'Use the CLI version for live mode.\n' +
-        'Run: npm run cli\n\n' +
-        'Commands:\n' +
-        '  live              Toggle live mode for watchlist\n' +
-        '  live AAPL NVDA    Live mode for specific symbols',
-        'info'
-      ),
+      block: createComponentBlock(<LiveModeView symbols={symbols} />),
     });
     return;
   }
