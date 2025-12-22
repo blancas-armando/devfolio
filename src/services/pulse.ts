@@ -1,23 +1,23 @@
-import Groq from 'groq-sdk';
+/**
+ * Market Pulse Service
+ * Real-time market snapshot with alerts and AI analysis
+ */
+
 import YahooFinance from 'yahoo-finance2';
-import { getMarketOverview, getNewsFeed, getQuotes, type MarketOverview, type IndexQuote, type SectorPerformance, type MarketMover, type NewsArticle } from './market.js';
+import { complete, isAIAvailable } from '../ai/client.js';
+import {
+  getMarketOverview,
+  getNewsFeed,
+  getQuotes,
+  type MarketOverview,
+  type IndexQuote,
+  type SectorPerformance,
+  type MarketMover,
+} from './market.js';
 import { getPulseConfig, type PulseConfig } from '../db/config.js';
 import { getWatchlist } from '../db/watchlist.js';
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'], versionCheck: false });
-
-// Lazy-load Groq client
-let _groq: Groq | null = null;
-function getGroq(): Groq {
-  if (!_groq) {
-    _groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
-    });
-  }
-  return _groq;
-}
-
-const MODEL = 'llama-3.3-70b-versatile';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Pulse Alert Types
@@ -48,34 +48,19 @@ export interface WatchlistItem {
 }
 
 export interface MarketPulse {
-  // Market status
   marketStatus: MarketStatus;
-
-  // Core market data
   indices: IndexQuote[];
   vix: number | null;
   breadth: { advancing: number; declining: number };
-
-  // Sectors
   topSectors: SectorPerformance[];
   bottomSectors: SectorPerformance[];
-
-  // Movers
   topMovers: MarketMover[];
-
-  // Context
   topHeadline: string | null;
-  futures: FuturesQuote[] | null;  // Only shown pre-market
+  futures: FuturesQuote[] | null;
   dxy: { price: number; changePercent: number } | null;
-
-  // Personalization
-  watchlistSnapshot: WatchlistItem[];  // Empty if no watchlist
+  watchlistSnapshot: WatchlistItem[];
   alerts: PulseAlert[];
-
-  // AI
   aiTake: string | null;
-
-  // Meta
   asOfDate: Date;
   config: PulseConfig;
 }
@@ -117,7 +102,7 @@ function detectAlerts(overview: MarketOverview, config: PulseConfig): PulseAlert
     });
   }
 
-  // Check sector rotation (biggest divergence)
+  // Check sector rotation
   if (config.showSectors && overview.sectors.length >= 2) {
     const topSector = overview.sectors[0];
     const bottomSector = overview.sectors[overview.sectors.length - 1];
@@ -170,7 +155,9 @@ function formatPulseDataForAI(pulse: Omit<MarketPulse, 'aiTake'>): string {
   // Indices
   lines.push('\nIndices:');
   for (const idx of pulse.indices) {
-    lines.push(`  ${idx.name}: ${idx.price.toLocaleString()} (${idx.changePercent >= 0 ? '+' : ''}${idx.changePercent.toFixed(2)}%)`);
+    lines.push(
+      `  ${idx.name}: ${idx.price.toLocaleString()} (${idx.changePercent >= 0 ? '+' : ''}${idx.changePercent.toFixed(2)}%)`
+    );
   }
 
   // Futures (pre-market)
@@ -186,7 +173,9 @@ function formatPulseDataForAI(pulse: Omit<MarketPulse, 'aiTake'>): string {
     lines.push(`\nVIX: ${pulse.vix.toFixed(1)}`);
   }
   if (pulse.dxy) {
-    lines.push(`DXY (Dollar): ${pulse.dxy.price.toFixed(2)} (${pulse.dxy.changePercent >= 0 ? '+' : ''}${pulse.dxy.changePercent.toFixed(2)}%)`);
+    lines.push(
+      `DXY (Dollar): ${pulse.dxy.price.toFixed(2)} (${pulse.dxy.changePercent >= 0 ? '+' : ''}${pulse.dxy.changePercent.toFixed(2)}%)`
+    );
   }
 
   // Breadth
@@ -230,24 +219,26 @@ const PULSE_PROMPT = `You are a concise market analyst. Given the current market
 Be direct and opinionated. No hedging or "it depends." Start with the most important insight.`;
 
 async function generateAITake(pulse: Omit<MarketPulse, 'aiTake'>): Promise<string | null> {
-  if (!process.env.GROQ_API_KEY) {
+  if (!isAIAvailable()) {
     return null;
   }
 
   try {
     const marketData = formatPulseDataForAI(pulse);
 
-    const response = await getGroq().chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: PULSE_PROMPT },
-        { role: 'user', content: marketData },
-      ],
-      max_tokens: 100,
-      temperature: 0.7,
-    });
+    const response = await complete(
+      {
+        messages: [
+          { role: 'system', content: PULSE_PROMPT },
+          { role: 'user', content: marketData },
+        ],
+        maxTokens: 100,
+        temperature: 0.7,
+      },
+      'summary'
+    );
 
-    return response.choices[0]?.message?.content?.trim() || null;
+    return response.content?.trim() || null;
   } catch {
     return null;
   }
@@ -289,7 +280,7 @@ async function getFutures(): Promise<FuturesQuote[]> {
   try {
     const data = await yahooFinance.quote(['ES=F', 'NQ=F']);
     const futuresArray = Array.isArray(data) ? data : [data];
-    return futuresArray.map(f => ({
+    return futuresArray.map((f) => ({
       symbol: f.symbol === 'ES=F' ? 'ES' : 'NQ',
       name: f.symbol === 'ES=F' ? 'S&P Futures' : 'Nasdaq Futures',
       price: f.regularMarketPrice ?? 0,
@@ -323,7 +314,7 @@ async function getWatchlistSnapshot(): Promise<WatchlistItem[]> {
     const symbols = watchlist.slice(0, 3);
     const quotes = await getQuotes(symbols);
 
-    return quotes.map(q => ({
+    return quotes.map((q) => ({
       symbol: q.symbol,
       price: q.price,
       changePercent: q.changePercent,
@@ -367,7 +358,7 @@ export async function getMarketPulse(): Promise<MarketPulse> {
   const topSectors = overview.sectors.slice(0, 3);
   const bottomSectors = overview.sectors.slice(-3).reverse();
 
-  // Get top movers by magnitude (always shown, not threshold-gated)
+  // Get top movers by magnitude
   const topMovers = [...overview.gainers, ...overview.losers]
     .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
     .slice(0, config.topMoversCount);

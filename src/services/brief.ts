@@ -1,21 +1,11 @@
-import Groq from 'groq-sdk';
-import {
-  getMarketBriefData,
-  type MarketBriefData,
-} from './market.js';
+/**
+ * Market Brief Service
+ * Generates AI-powered daily market summaries
+ */
 
-// Lazy-load Groq client
-let _groq: Groq | null = null;
-function getGroq(): Groq {
-  if (!_groq) {
-    _groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
-    });
-  }
-  return _groq;
-}
-
-const MODEL = 'llama-3.3-70b-versatile';
+import { complete } from '../ai/client.js';
+import { extractJson } from '../ai/json.js';
+import { getMarketBriefData, type MarketBriefData } from './market.js';
 
 export interface MarketNarrative {
   headline: string;
@@ -36,25 +26,37 @@ function formatDataForAI(data: MarketBriefData): string {
   // Indices
   lines.push('INDICES:');
   for (const idx of data.indices) {
-    lines.push(`  ${idx.name}: ${idx.price.toFixed(2)} (${idx.changePercent >= 0 ? '+' : ''}${idx.changePercent.toFixed(2)}% today, ${idx.weekChange !== null ? `${idx.weekChange >= 0 ? '+' : ''}${idx.weekChange.toFixed(1)}% week` : 'n/a week'})`);
+    lines.push(
+      `  ${idx.name}: ${idx.price.toFixed(2)} (${idx.changePercent >= 0 ? '+' : ''}${idx.changePercent.toFixed(2)}% today, ${idx.weekChange !== null ? `${idx.weekChange >= 0 ? '+' : ''}${idx.weekChange.toFixed(1)}% week` : 'n/a week'})`
+    );
   }
 
   // Indicators
   lines.push('\nMARKET INDICATORS:');
   if (data.indicators.vix) {
-    lines.push(`  VIX: ${data.indicators.vix.value.toFixed(2)} (${data.indicators.vix.changePercent >= 0 ? '+' : ''}${data.indicators.vix.changePercent.toFixed(1)}%)`);
+    lines.push(
+      `  VIX: ${data.indicators.vix.value.toFixed(2)} (${data.indicators.vix.changePercent >= 0 ? '+' : ''}${data.indicators.vix.changePercent.toFixed(1)}%)`
+    );
   }
   if (data.indicators.treasury10Y) {
-    lines.push(`  10Y Treasury: ${data.indicators.treasury10Y.value.toFixed(2)}% (${data.indicators.treasury10Y.change >= 0 ? '+' : ''}${(data.indicators.treasury10Y.change * 100).toFixed(0)}bps)`);
+    lines.push(
+      `  10Y Treasury: ${data.indicators.treasury10Y.value.toFixed(2)}% (${data.indicators.treasury10Y.change >= 0 ? '+' : ''}${(data.indicators.treasury10Y.change * 100).toFixed(0)}bps)`
+    );
   }
   if (data.indicators.oil) {
-    lines.push(`  Oil: $${data.indicators.oil.value.toFixed(2)} (${data.indicators.oil.changePercent >= 0 ? '+' : ''}${data.indicators.oil.changePercent.toFixed(1)}%)`);
+    lines.push(
+      `  Oil: $${data.indicators.oil.value.toFixed(2)} (${data.indicators.oil.changePercent >= 0 ? '+' : ''}${data.indicators.oil.changePercent.toFixed(1)}%)`
+    );
   }
   if (data.indicators.gold) {
-    lines.push(`  Gold: $${data.indicators.gold.value.toFixed(2)} (${data.indicators.gold.changePercent >= 0 ? '+' : ''}${data.indicators.gold.changePercent.toFixed(1)}%)`);
+    lines.push(
+      `  Gold: $${data.indicators.gold.value.toFixed(2)} (${data.indicators.gold.changePercent >= 0 ? '+' : ''}${data.indicators.gold.changePercent.toFixed(1)}%)`
+    );
   }
   if (data.indicators.bitcoin) {
-    lines.push(`  Bitcoin: $${data.indicators.bitcoin.value.toLocaleString()} (${data.indicators.bitcoin.changePercent >= 0 ? '+' : ''}${data.indicators.bitcoin.changePercent.toFixed(1)}%)`);
+    lines.push(
+      `  Bitcoin: $${data.indicators.bitcoin.value.toLocaleString()} (${data.indicators.bitcoin.changePercent >= 0 ? '+' : ''}${data.indicators.bitcoin.changePercent.toFixed(1)}%)`
+    );
   }
 
   // Sectors
@@ -75,7 +77,9 @@ function formatDataForAI(data: MarketBriefData): string {
   }
 
   // Breadth
-  lines.push(`\nMARKET BREADTH: ${data.breadth.advancing} advancing, ${data.breadth.declining} declining (ratio: ${(data.breadth.advancing / Math.max(data.breadth.declining, 1)).toFixed(2)})`);
+  lines.push(
+    `\nMARKET BREADTH: ${data.breadth.advancing} advancing, ${data.breadth.declining} declining (ratio: ${(data.breadth.advancing / Math.max(data.breadth.declining, 1)).toFixed(2)})`
+  );
 
   // News
   lines.push('\nTOP NEWS:');
@@ -84,6 +88,18 @@ function formatDataForAI(data: MarketBriefData): string {
   }
 
   return lines.join('\n');
+}
+
+function isMarketNarrative(obj: unknown): obj is MarketNarrative {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return (
+    typeof o.headline === 'string' &&
+    typeof o.summary === 'string' &&
+    typeof o.sectorAnalysis === 'string' &&
+    Array.isArray(o.keyThemes) &&
+    typeof o.outlook === 'string'
+  );
 }
 
 async function generateNarrative(data: MarketBriefData): Promise<MarketNarrative | null> {
@@ -103,28 +119,20 @@ Respond in JSON format with these fields:
 
 Be specific, reference actual data points. No generic platitudes. Write like a Bloomberg terminal summary - concise and actionable.`;
 
-    const response = await getGroq().chat.completions.create({
-      model: MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 512,
-      temperature: 0.3,
-    });
+    const response = await complete(
+      {
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+      },
+      'summary'
+    );
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) return null;
+    if (!response.content) return null;
 
-    // Extract JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
+    const result = extractJson<MarketNarrative>(response.content, isMarketNarrative);
+    if (!result.success) return null;
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    return {
-      headline: parsed.headline || 'Market Update',
-      summary: parsed.summary || '',
-      sectorAnalysis: parsed.sectorAnalysis || '',
-      keyThemes: parsed.keyThemes || [],
-      outlook: parsed.outlook || '',
-    };
+    return result.data;
   } catch {
     return null;
   }

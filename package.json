@@ -41,6 +41,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@inkjs/ui": "^2.0.0",
     "@mozilla/readability": "^0.6.0",
     "asciichart": "^1.5.25",
@@ -53,6 +54,7 @@
     "ink-text-input": "^6.0.0",
     "jimp": "^1.6.0",
     "jsdom": "^27.3.0",
+    "openai": "^6.15.0",
     "react": "^18.3.1",
     "yahoo-finance2": "^3.10.2"
   },

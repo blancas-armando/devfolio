@@ -3,8 +3,9 @@
  * Combines Yahoo Finance earnings data with SEC filings
  */
 
-import Groq from 'groq-sdk';
 import YahooFinance from 'yahoo-finance2';
+import { complete } from '../ai/client.js';
+import { extractJson } from '../ai/json.js';
 import {
   getRecentFilings,
   getFilingText,
@@ -17,16 +18,8 @@ import {
 } from './sec.js';
 import { getCompanyProfile, type CompanyProfile } from './market.js';
 
-// Initialize clients
+// Initialize Yahoo Finance client
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'], versionCheck: false });
-
-let _groq: Groq | null = null;
-function getGroq(): Groq {
-  if (!_groq) {
-    _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  }
-  return _groq;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -118,6 +111,30 @@ export interface EarningsReport {
   guidanceAnalysis: string;
   keyTakeaways: string[];
   outlook: string;
+}
+
+interface EarningsAnalysisResponse {
+  earningsSummary: string;
+  performanceTrend: string;
+  guidanceAnalysis: string;
+  keyTakeaways: string[];
+  outlook: string;
+  kpis: KPIMetric[];
+  guidance: GuidanceMetric[];
+}
+
+function isEarningsAnalysisResponse(obj: unknown): obj is EarningsAnalysisResponse {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return (
+    typeof o.earningsSummary === 'string' &&
+    typeof o.performanceTrend === 'string' &&
+    typeof o.guidanceAnalysis === 'string' &&
+    Array.isArray(o.keyTakeaways) &&
+    typeof o.outlook === 'string' &&
+    Array.isArray(o.kpis) &&
+    Array.isArray(o.guidance)
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -406,29 +423,28 @@ For guidance, include Rev, OP, OPM, EPS and any other relevant metrics.
 Use actual numbers from the data. If not available, use reasonable estimates based on sector.`;
 
   try {
-    const response = await getGroq().chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2000,
-      temperature: 0.3,
-    });
+    const response = await complete(
+      {
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 2000,
+        temperature: 0.3,
+      },
+      'research'
+    );
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) throw new Error('No response');
+    if (!response.content) throw new Error('No response');
 
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON found');
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    const result = extractJson<EarningsAnalysisResponse>(response.content, isEarningsAnalysisResponse);
+    if (!result.success || !result.data) throw new Error('Invalid response format');
 
     return {
-      earningsSummary: parsed.earningsSummary ?? '',
-      performanceTrend: parsed.performanceTrend ?? '',
-      guidanceAnalysis: parsed.guidanceAnalysis ?? '',
-      keyTakeaways: parsed.keyTakeaways ?? [],
-      outlook: parsed.outlook ?? '',
-      kpis: parsed.kpis ?? [],
-      guidance: parsed.guidance ?? [],
+      earningsSummary: result.data.earningsSummary,
+      performanceTrend: result.data.performanceTrend,
+      guidanceAnalysis: result.data.guidanceAnalysis,
+      keyTakeaways: result.data.keyTakeaways,
+      outlook: result.data.outlook,
+      kpis: result.data.kpis,
+      guidance: result.data.guidance,
     };
   } catch {
     return {

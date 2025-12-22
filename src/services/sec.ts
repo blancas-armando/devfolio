@@ -5,15 +5,8 @@
  * API Docs: https://www.sec.gov/search-filings/edgar-application-programming-interfaces
  */
 
-import Groq from 'groq-sdk';
-
-let _groq: Groq | null = null;
-function getGroq(): Groq {
-  if (!_groq) {
-    _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  }
-  return _groq;
-}
+import { complete } from '../ai/client.js';
+import { extractJson } from '../ai/json.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -349,6 +342,25 @@ export interface FilingSummary {
   generatedAt: Date;
 }
 
+interface FilingSummaryResponse {
+  summary: string;
+  keyPoints: string[];
+  sentiment: FilingSentiment;
+  sentimentReason: string;
+  materialEvents?: string[];
+}
+
+function isFilingSummaryResponse(obj: unknown): obj is FilingSummaryResponse {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return (
+    typeof o.summary === 'string' &&
+    Array.isArray(o.keyPoints) &&
+    (o.sentiment === 'positive' || o.sentiment === 'negative' || o.sentiment === 'neutral' || o.sentiment === 'mixed') &&
+    typeof o.sentimentReason === 'string'
+  );
+}
+
 export async function generateFilingSummary(
   filing: SECFiling,
   symbol: string
@@ -397,21 +409,19 @@ Guidelines:
 - Be specific with numbers and facts from the filing`;
 
   try {
-    const response = await getGroq().chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1500,
-      temperature: 0.3,
-    });
+    const response = await complete(
+      {
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 1500,
+        temperature: 0.3,
+      },
+      'filing'
+    );
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) return null;
+    if (!response.content) return null;
 
-    // Parse JSON response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    const result = extractJson<FilingSummaryResponse>(response.content, isFilingSummaryResponse);
+    if (!result.success || !result.data) return null;
 
     return {
       symbol: symbol.toUpperCase(),
@@ -419,11 +429,11 @@ Guidelines:
       filingDate: filing.filingDate,
       fileUrl: filing.fileUrl,
 
-      summary: parsed.summary ?? 'Unable to generate summary.',
-      keyPoints: parsed.keyPoints ?? [],
-      sentiment: parsed.sentiment ?? 'neutral',
-      sentimentReason: parsed.sentimentReason ?? '',
-      materialEvents: parsed.materialEvents,
+      summary: result.data.summary,
+      keyPoints: result.data.keyPoints,
+      sentiment: result.data.sentiment,
+      sentimentReason: result.data.sentimentReason,
+      materialEvents: result.data.materialEvents,
 
       generatedAt: new Date(),
     };

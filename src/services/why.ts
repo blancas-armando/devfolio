@@ -3,19 +3,9 @@
  * Explains stock movements using AI analysis of news and market data
  */
 
-import Groq from 'groq-sdk';
+import { complete } from '../ai/client.js';
+import { extractJson } from '../ai/json.js';
 import { getCompanyProfile, getNewsFeed, type NewsArticle } from './market.js';
-import { extractJson } from '../utils/errors.js';
-
-let _groq: Groq | null = null;
-function getGroq(): Groq {
-  if (!_groq) {
-    _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  }
-  return _groq;
-}
-
-const MODEL = 'llama-3.3-70b-versatile';
 
 export interface WhyExplanation {
   symbol: string;
@@ -27,14 +17,29 @@ export interface WhyExplanation {
   newsContext: string[];
 }
 
+interface WhyResponse {
+  headline: string;
+  explanation: string;
+  factors: string[];
+  newsContext: string[];
+}
+
+function isWhyResponse(obj: unknown): obj is WhyResponse {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return (
+    typeof o.headline === 'string' &&
+    typeof o.explanation === 'string' &&
+    Array.isArray(o.factors) &&
+    Array.isArray(o.newsContext)
+  );
+}
+
 export async function explainMovement(symbol: string): Promise<WhyExplanation | null> {
   const upperSymbol = symbol.toUpperCase();
 
   // Fetch profile and news in parallel
-  const [profile, news] = await Promise.all([
-    getCompanyProfile(upperSymbol),
-    getNewsFeed([upperSymbol]),
-  ]);
+  const [profile, news] = await Promise.all([getCompanyProfile(upperSymbol), getNewsFeed([upperSymbol])]);
 
   if (!profile) return null;
 
@@ -68,33 +73,28 @@ Explain why this stock might be moving. Respond in JSON:
 Be specific. If news doesn't explain it, mention broader market or sector factors.`;
 
   try {
-    const response = await getGroq().chat.completions.create({
-      model: MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 400,
-      temperature: 0.3,
-    });
+    const response = await complete(
+      {
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 400,
+        temperature: 0.3,
+      },
+      'quick'
+    );
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) return null;
+    if (!response.content) return null;
 
-    interface WhyResponse {
-      headline?: string;
-      explanation?: string;
-      factors?: string[];
-      newsContext?: string[];
-    }
-    const parsed = extractJson<WhyResponse>(content);
-    if (!parsed) return null;
+    const result = extractJson<WhyResponse>(response.content, isWhyResponse);
+    if (!result.success || !result.data) return null;
 
     return {
       symbol: upperSymbol,
       price: profile.price,
       changePercent: profile.changePercent,
-      headline: parsed.headline || '',
-      explanation: parsed.explanation || '',
-      factors: parsed.factors || [],
-      newsContext: parsed.newsContext || [],
+      headline: result.data.headline,
+      explanation: result.data.explanation,
+      factors: result.data.factors,
+      newsContext: result.data.newsContext,
     };
   } catch {
     return null;
