@@ -1,18 +1,49 @@
 /**
  * AI Agent - Chat and tool orchestration
  * Uses the multi-provider AI client for all completions
+ * Integrates conversational memory and user preferences
  */
 
 import { complete, stream } from './client.js';
 import { tools, type ToolName } from './tools.js';
 import { executeTool } from './executor.js';
-import { SYSTEM_PROMPT } from './prompts.js';
+import { buildContextualPrompt, buildFullContext, SYSTEM_PROMPT } from './prompts.js';
+import {
+  getOrCreateSession,
+  addMessage,
+  trackSymbol,
+  extractSymbolsFromText,
+  type ChatSession,
+} from '../db/memory.js';
+import { learnFromText } from '../db/preferences.js';
 import type { Message, ToolResult } from '../types/index.js';
 import type { AIMessage, AITool } from './providers/types.js';
 
 export interface AgentResponse {
   message: string;
   toolResults: ToolResult[];
+  sessionId?: number;
+}
+
+// Current active session (managed per process)
+let activeSession: ChatSession | null = null;
+
+/**
+ * Get or create the active chat session
+ */
+export function getActiveSession(): ChatSession {
+  if (!activeSession) {
+    activeSession = getOrCreateSession();
+  }
+  return activeSession;
+}
+
+/**
+ * Start a new chat session
+ */
+export function startNewSession(): ChatSession {
+  activeSession = getOrCreateSession();
+  return activeSession;
 }
 
 /**
@@ -28,24 +59,62 @@ const aiTools: AITool[] = tools.map((t) => ({
 }));
 
 /**
- * Build messages array for AI request
+ * Build messages array for AI request with memory context
  */
-function buildMessages(userMessage: string, history: Message[]): AIMessage[] {
+function buildMessages(userMessage: string, history: Message[], sessionId?: number): AIMessage[] {
+  // Use contextual prompt if session exists, otherwise basic prompt
+  const systemPrompt = sessionId ? buildContextualPrompt(sessionId) : SYSTEM_PROMPT;
+
+  // Add financial context to user message for richer understanding
+  const context = buildFullContext(sessionId);
+  const enrichedUserMessage = context
+    ? `${userMessage}\n\n[CONTEXT]\n${context}`
+    : userMessage;
+
   return [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
     ...history.map((m) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     })),
-    { role: 'user', content: userMessage },
+    { role: 'user', content: enrichedUserMessage },
   ];
 }
 
 /**
- * Non-streaming chat with tool support
+ * Process and store conversation data
+ */
+function processConversation(
+  sessionId: number,
+  userMessage: string,
+  assistantMessage: string,
+  toolCalls?: unknown[],
+  toolResults?: unknown[]
+): void {
+  // Store messages
+  addMessage(sessionId, 'user', userMessage);
+  addMessage(sessionId, 'assistant', assistantMessage, toolCalls, toolResults);
+
+  // Track mentioned symbols
+  const userSymbols = extractSymbolsFromText(userMessage);
+  const assistantSymbols = extractSymbolsFromText(assistantMessage);
+  const allSymbols = [...new Set([...userSymbols, ...assistantSymbols])];
+
+  for (const symbol of allSymbols) {
+    trackSymbol(sessionId, symbol, userMessage.substring(0, 100));
+  }
+
+  // Learn preferences from user message
+  learnFromText(userMessage);
+}
+
+/**
+ * Non-streaming chat with tool support and memory
  */
 export async function chat(userMessage: string, history: Message[] = []): Promise<AgentResponse> {
-  const messages = buildMessages(userMessage, history);
+  // Get or create session for memory
+  const session = getActiveSession();
+  const messages = buildMessages(userMessage, history, session.id);
   const toolResults: ToolResult[] = [];
 
   // Initial request with tools
@@ -87,20 +156,38 @@ export async function chat(userMessage: string, history: Message[] = []): Promis
       'chat'
     );
 
+    const assistantMessage = finalResponse.content ?? '';
+
+    // Store conversation in memory
+    processConversation(
+      session.id,
+      userMessage,
+      assistantMessage,
+      response.toolCalls,
+      toolResults
+    );
+
     return {
-      message: finalResponse.content ?? '',
+      message: assistantMessage,
       toolResults,
+      sessionId: session.id,
     };
   }
 
+  const assistantMessage = response.content ?? '';
+
+  // Store conversation in memory
+  processConversation(session.id, userMessage, assistantMessage);
+
   return {
-    message: response.content ?? '',
+    message: assistantMessage,
     toolResults: [],
+    sessionId: session.id,
   };
 }
 
 /**
- * Streaming chat with tool support
+ * Streaming chat with tool support and memory
  * Tools are executed non-streaming, final response is streamed
  */
 export async function streamChat(
@@ -108,7 +195,9 @@ export async function streamChat(
   history: Message[] = [],
   onToken: (token: string) => void
 ): Promise<AgentResponse> {
-  const messages = buildMessages(userMessage, history);
+  // Get or create session for memory
+  const session = getActiveSession();
+  const messages = buildMessages(userMessage, history, session.id);
   const toolResults: ToolResult[] = [];
 
   // Initial request (non-streaming to check for tools)
@@ -150,11 +239,24 @@ export async function streamChat(
       }
     }
 
-    return { message: fullMessage, toolResults };
+    // Store conversation in memory
+    processConversation(
+      session.id,
+      userMessage,
+      fullMessage,
+      response.toolCalls,
+      toolResults
+    );
+
+    return { message: fullMessage, toolResults, sessionId: session.id };
   }
 
   // No tools, emit response directly
   const content = response.content ?? '';
   onToken(content);
-  return { message: content, toolResults: [] };
+
+  // Store conversation in memory
+  processConversation(session.id, userMessage, content);
+
+  return { message: content, toolResults: [], sessionId: session.id };
 }

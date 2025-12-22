@@ -51,5 +51,46 @@ export function initializeSchema(db: Database.Database) {
       ascii_art TEXT NOT NULL,
       cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Chat sessions for conversational memory
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_active_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      context_summary TEXT
+    );
+
+    -- Messages within chat sessions
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      tool_calls TEXT,
+      tool_results TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id);
+
+    -- Symbols discussed in conversations (for proactive updates)
+    CREATE TABLE IF NOT EXISTS conversation_symbols (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL,
+      symbol TEXT NOT NULL,
+      mentioned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      context TEXT,
+      FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_conv_symbols_session ON conversation_symbols(session_id);
+    CREATE INDEX IF NOT EXISTS idx_conv_symbols_symbol ON conversation_symbols(symbol);
+
+    -- Learned user preferences
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      confidence REAL DEFAULT 0.5,
+      last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 }
