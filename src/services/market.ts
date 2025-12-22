@@ -4,6 +4,13 @@ import { JSDOM } from 'jsdom';
 import { execSync } from 'child_process';
 import type { Quote } from '../types/index.js';
 import { CACHE_TTL, HISTORICAL_DAYS } from '../constants/index.js';
+import { recordApiCall, recordCacheHit, recordError } from './stats.js';
+import {
+  rateLimitedCall,
+  getRefreshMultiplier,
+  getRateLimitStatus,
+  shouldThrottle,
+} from './ratelimit.js';
 
 // Initialize Yahoo Finance client with notices suppressed
 const yahooFinance = new YahooFinance({
@@ -21,12 +28,40 @@ function getCached<T>(key: string): T | null {
     cache.delete(key);
     return null;
   }
+  recordCacheHit(key);
   return entry.data as T;
 }
 
 function setCache(key: string, data: unknown, ttlMs: number) {
   cache.set(key, { data, expires: Date.now() + ttlMs });
 }
+
+// Wrapper to track API calls with rate limiting
+async function trackedApiCall<T>(
+  endpoint: string,
+  fn: () => Promise<T>,
+  options: { essential?: boolean; dedupeKey?: string } = {}
+): Promise<T> {
+  const start = Date.now();
+  try {
+    const result = await rateLimitedCall(
+      endpoint,
+      async () => {
+        const data = await fn();
+        recordApiCall(endpoint, false, Date.now() - start);
+        return data;
+      },
+      options
+    );
+    return result;
+  } catch (error) {
+    recordError(error instanceof Error ? error.message : 'Unknown error');
+    throw error;
+  }
+}
+
+// Re-export rate limit utilities for use by other modules
+export { getRefreshMultiplier, getRateLimitStatus, shouldThrottle };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Company Profile Types
@@ -176,8 +211,67 @@ export async function getQuotes(
   symbols: string[],
   options: GetQuoteOptions = {}
 ): Promise<Quote[]> {
-  const results = await Promise.all(symbols.map(s => getQuote(s, options)));
-  return results.filter((q): q is Quote => q !== null);
+  if (symbols.length === 0) return [];
+
+  const { fresh = false } = options;
+
+  // Check cache for all symbols first
+  const cached: Quote[] = [];
+  const uncached: string[] = [];
+
+  if (!fresh && !liveModeEnabled) {
+    for (const symbol of symbols) {
+      const cachedQuote = getCached<Quote>(`quote:${symbol}`);
+      if (cachedQuote) {
+        cached.push(cachedQuote);
+      } else {
+        uncached.push(symbol);
+      }
+    }
+  } else {
+    uncached.push(...symbols);
+  }
+
+  // If all cached, return immediately
+  if (uncached.length === 0) {
+    return cached;
+  }
+
+  try {
+    // Batch fetch all uncached symbols in ONE API call
+    const results = await trackedApiCall(
+      `quote/batch/${uncached.length}`,
+      () => yahooFinance.quote(uncached),
+      { dedupeKey: `quotes:${uncached.sort().join(',')}` }
+    );
+
+    const resultsArray = Array.isArray(results) ? results : [results];
+    const freshQuotes: Quote[] = [];
+
+    for (const result of resultsArray) {
+      if (!result) continue;
+
+      const quote: Quote = {
+        symbol: result.symbol,
+        price: result.regularMarketPrice ?? 0,
+        change: result.regularMarketChange ?? 0,
+        changePercent: result.regularMarketChangePercent ?? 0,
+        volume: result.regularMarketVolume ?? 0,
+        marketCap: result.marketCap,
+        pe: result.trailingPE,
+        high52w: result.fiftyTwoWeekHigh,
+        low52w: result.fiftyTwoWeekLow,
+      };
+
+      // Cache individual quotes
+      setCache(`quote:${quote.symbol}`, quote, 10_000);
+      freshQuotes.push(quote);
+    }
+
+    return [...cached, ...freshQuotes];
+  } catch {
+    return cached; // Return cached quotes on error
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -513,25 +607,60 @@ export interface IntradayData {
   relativeVolume: number;
   vwap: number;
   marketState: 'PRE' | 'REGULAR' | 'POST' | 'CLOSED';
+  // Extended metrics
+  fiftyTwoWeekHigh: number;
+  fiftyTwoWeekLow: number;
+  marketCap: number;
+  peRatio: number | null;
+  // Performance periods
+  performance: {
+    week: number | null;    // 5 day change %
+    month: number | null;   // 1 month change %
+    threeMonth: number | null;
+    sixMonth: number | null;
+    ytd: number | null;
+    year: number | null;    // 52 week change %
+  };
 }
 
 export async function getIntradayData(symbol: string): Promise<IntradayData | null> {
-  try {
-    // Fetch quote for current data
-    const quoteResult = await yahooFinance.quote(symbol);
-    if (!quoteResult) return null;
+  // Short-term cache for intraday data (8 seconds) - reduces API calls in live mode
+  // This is separate from the regular cache and works even in live mode
+  const cacheKey = `intraday:${symbol}`;
+  const cached = getCached<IntradayData>(cacheKey);
+  if (cached) return cached;
 
-    // Determine market hours (ET timezone)
+  try {
     const now = new Date();
     const marketOpen = new Date(now);
     marketOpen.setHours(9, 30, 0, 0); // 9:30 AM
 
-    // Fetch intraday chart data (5-minute intervals)
-    const chartResult = await yahooFinance.chart(symbol, {
-      period1: marketOpen,
-      period2: now,
-      interval: '5m',
-    });
+    // Fetch chart and quote data in parallel (with tracking and deduplication)
+    const [chartResult, quoteResult] = await Promise.all([
+      trackedApiCall(
+        `chart/${symbol}`,
+        () => yahooFinance.chart(symbol, {
+          period1: marketOpen,
+          period2: now,
+          interval: '5m',
+        }),
+        { dedupeKey: `intraday-chart:${symbol}`, essential: true }
+      ),
+      trackedApiCall(
+        `quoteSummary/${symbol}`,
+        () => yahooFinance.quoteSummary(symbol, {
+          modules: ['price', 'summaryDetail', 'defaultKeyStatistics'],
+        }),
+        { dedupeKey: `intraday-quote:${symbol}`, essential: true }
+      ),
+    ]);
+
+    const meta = chartResult.meta;
+    if (!meta) return null;
+
+    const price = quoteResult.price;
+    const summary = quoteResult.summaryDetail;
+    const keyStats = quoteResult.defaultKeyStatistics;
 
     const bars: IntradayBar[] = chartResult.quotes
       .filter(q => q.date && q.close !== null && q.close !== undefined)
@@ -548,34 +677,94 @@ export async function getIntradayData(symbol: string): Promise<IntradayData | nu
       vwapNumerator += bar.price * bar.volume;
       vwapDenominator += bar.volume;
     }
-    const vwap = vwapDenominator > 0 ? vwapNumerator / vwapDenominator : quoteResult.regularMarketPrice ?? 0;
+    const currentPrice = Number(price?.regularMarketPrice) || (meta.regularMarketPrice ?? bars[bars.length - 1]?.price ?? 0);
+    const vwap = vwapDenominator > 0 ? vwapNumerator / vwapDenominator : currentPrice;
 
-    // Determine market state
+    // Determine market state - normalize various API values
     let marketState: 'PRE' | 'REGULAR' | 'POST' | 'CLOSED' = 'CLOSED';
-    const state = quoteResult.marketState;
-    if (state === 'PRE') marketState = 'PRE';
-    else if (state === 'REGULAR') marketState = 'REGULAR';
-    else if (state === 'POST' || state === 'POSTPOST') marketState = 'POST';
+    const state = String(price?.marketState ?? meta.marketState ?? '').toUpperCase();
+    if (state.includes('PRE')) marketState = 'PRE';
+    else if (state.includes('REGULAR') || state === 'OPEN') marketState = 'REGULAR';
+    else if (state.includes('POST') || state.includes('AFTER')) marketState = 'POST';
+    else if (state.includes('CLOSE')) marketState = 'CLOSED';
+    else {
+      // Fallback: determine from current time (US Eastern)
+      const etHour = now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false });
+      const etMinute = now.toLocaleString('en-US', { timeZone: 'America/New_York', minute: 'numeric' });
+      const hour = parseInt(etHour, 10);
+      const minute = parseInt(etMinute, 10);
+      const timeInMinutes = hour * 60 + minute;
+      const isWeekday = [1, 2, 3, 4, 5].includes(now.getDay());
 
-    const avgVolume = quoteResult.averageDailyVolume3Month ?? quoteResult.averageDailyVolume10Day ?? 0;
-    const currentVolume = quoteResult.regularMarketVolume ?? 0;
+      if (isWeekday) {
+        if (timeInMinutes >= 4 * 60 && timeInMinutes < 9 * 60 + 30) marketState = 'PRE';
+        else if (timeInMinutes >= 9 * 60 + 30 && timeInMinutes < 16 * 60) marketState = 'REGULAR';
+        else if (timeInMinutes >= 16 * 60 && timeInMinutes < 20 * 60) marketState = 'POST';
+      }
+    }
 
-    return {
-      symbol: quoteResult.symbol,
+    // Calculate day high/low from bars if not in meta
+    const barPrices = bars.map(b => b.price);
+    const dayHigh = Number(price?.regularMarketDayHigh) || Number(meta.regularMarketDayHigh) || Math.max(...barPrices, 0);
+    const dayLow = Number(price?.regularMarketDayLow) || Number(meta.regularMarketDayLow) || Math.min(...barPrices, Infinity);
+    const totalVolume = Number(price?.regularMarketVolume) || bars.reduce((sum, b) => sum + b.volume, 0);
+
+    // Get average volume from quote data (more reliable)
+    const avgVolume = Number(summary?.averageVolume) || Number(price?.averageDailyVolume3Month) || 0;
+
+    // Calculate relative volume properly - compare to expected volume at this time of day
+    // Approximate: if market has been open X hours out of 6.5, expect X/6.5 of avg volume
+    const marketOpenTime = 9 * 60 + 30; // 9:30 AM in minutes
+    const marketCloseTime = 16 * 60; // 4:00 PM in minutes
+    const etHour = parseInt(now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }), 10);
+    const etMinute = parseInt(now.toLocaleString('en-US', { timeZone: 'America/New_York', minute: 'numeric' }), 10);
+    const currentTimeMinutes = etHour * 60 + etMinute;
+    const minutesIntoSession = Math.max(0, Math.min(currentTimeMinutes - marketOpenTime, marketCloseTime - marketOpenTime));
+    const sessionProgress = minutesIntoSession / (marketCloseTime - marketOpenTime);
+    const expectedVolume = avgVolume * sessionProgress;
+    const relativeVolume = expectedVolume > 0 ? totalVolume / expectedVolume : 0;
+
+    // Get 52-week data
+    const fiftyTwoWeekHigh = Number(summary?.fiftyTwoWeekHigh) || 0;
+    const fiftyTwoWeekLow = Number(summary?.fiftyTwoWeekLow) || 0;
+
+    // Performance metrics - convert decimals to percentages
+    const previousClose = Number(price?.regularMarketPreviousClose) || Number(meta.previousClose ?? meta.chartPreviousClose) || 0;
+
+    const intradayData: IntradayData = {
+      symbol: meta.symbol ?? symbol,
       bars,
-      dayOpen: quoteResult.regularMarketOpen ?? quoteResult.regularMarketPrice ?? 0,
-      dayHigh: quoteResult.regularMarketDayHigh ?? quoteResult.regularMarketPrice ?? 0,
-      dayLow: quoteResult.regularMarketDayLow ?? quoteResult.regularMarketPrice ?? 0,
-      currentPrice: quoteResult.regularMarketPrice ?? 0,
-      previousClose: quoteResult.regularMarketPreviousClose ?? 0,
-      change: quoteResult.regularMarketChange ?? 0,
-      changePercent: quoteResult.regularMarketChangePercent ?? 0,
-      volume: currentVolume,
+      dayOpen: Number(price?.regularMarketOpen) || Number(meta.regularMarketOpen ?? meta.chartPreviousClose ?? currentPrice),
+      dayHigh: dayHigh === -Infinity ? currentPrice : dayHigh,
+      dayLow: dayLow === Infinity ? currentPrice : dayLow,
+      currentPrice,
+      previousClose,
+      change: currentPrice - previousClose,
+      changePercent: previousClose > 0 ? ((currentPrice - previousClose) / previousClose) * 100 : 0,
+      volume: totalVolume,
       avgVolume,
-      relativeVolume: avgVolume > 0 ? currentVolume / avgVolume : 0,
+      relativeVolume,
       vwap,
       marketState,
+      // Extended metrics
+      fiftyTwoWeekHigh,
+      fiftyTwoWeekLow,
+      marketCap: Number(price?.marketCap) || 0,
+      peRatio: Number(summary?.trailingPE) || null,
+      // Performance periods (Yahoo returns these as decimals, convert to %)
+      performance: {
+        week: keyStats?.['52WeekChange'] !== undefined ? null : null, // 5-day not directly available
+        month: null, // Not directly available
+        threeMonth: null, // Not directly available
+        sixMonth: null, // Not directly available
+        ytd: keyStats?.ytdReturn !== undefined ? Number(keyStats.ytdReturn) * 100 : null,
+        year: keyStats?.['52WeekChange'] !== undefined ? Number(keyStats['52WeekChange']) * 100 : null,
+      },
     };
+
+    // Cache for 8 seconds - short enough to stay fresh, long enough to reduce duplicate calls
+    setCache(cacheKey, intradayData, 8_000);
+    return intradayData;
   } catch {
     return null;
   }
@@ -588,15 +777,24 @@ export interface MarketContext {
 }
 
 export async function getMarketContextQuick(): Promise<MarketContext> {
+  // Use short cache for market context to reduce API calls
+  const cacheKey = 'market-context-quick';
+  const cached = getCached<MarketContext>(cacheKey);
+  if (cached) return cached;
+
   try {
-    const quotes = await yahooFinance.quote(['SPY', 'QQQ', '^VIX']);
+    const quotes = await trackedApiCall(
+      'quote/market-context',
+      () => yahooFinance.quote(['SPY', 'QQQ', '^VIX']),
+      { dedupeKey: 'market-context', essential: true }
+    );
     const arr = Array.isArray(quotes) ? quotes : [quotes];
 
     const spyQuote = arr.find(q => q.symbol === 'SPY');
     const qqqQuote = arr.find(q => q.symbol === 'QQQ');
     const vixQuote = arr.find(q => q.symbol === '^VIX');
 
-    return {
+    const context: MarketContext = {
       spy: spyQuote ? {
         price: spyQuote.regularMarketPrice ?? 0,
         change: spyQuote.regularMarketChange ?? 0,
@@ -612,6 +810,10 @@ export async function getMarketContextQuick(): Promise<MarketContext> {
         change: vixQuote.regularMarketChange ?? 0,
       } : null,
     };
+
+    // Cache for 15 seconds to reduce API calls in live mode
+    setCache(cacheKey, context, 15_000);
+    return context;
   } catch {
     return { spy: null, qqq: null, vix: null };
   }
