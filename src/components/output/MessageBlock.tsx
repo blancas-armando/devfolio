@@ -278,3 +278,194 @@ export const CommonErrors = {
     ],
   }),
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Enhanced Error Message with Recovery Actions
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface RecoveryAction {
+  label: string;
+  command: string;
+  description?: string;
+  primary?: boolean;
+}
+
+export interface EnhancedErrorMessageProps {
+  /** Main error message */
+  message: string;
+  /** Error code for reference */
+  code?: string;
+  /** Detailed explanation */
+  details?: string;
+  /** Suggestions for resolution */
+  suggestions?: string[];
+  /** Recovery actions with commands */
+  actions?: RecoveryAction[];
+  /** Severity level */
+  severity?: 'error' | 'warning' | 'info';
+  /** Width of the error block */
+  width?: number;
+  /** Show border */
+  bordered?: boolean;
+}
+
+const severityConfig = {
+  error: { color: palette.negative, icon: '\u2717', label: 'Error' },
+  warning: { color: palette.warning, icon: '\u26A0', label: 'Warning' },
+  info: { color: palette.info, icon: '\u2139', label: 'Info' },
+};
+
+export function EnhancedErrorMessage({
+  message,
+  code,
+  details,
+  suggestions = [],
+  actions = [],
+  severity = 'error',
+  width = 60,
+  bordered = true,
+}: EnhancedErrorMessageProps): React.ReactElement {
+  const config = severityConfig[severity];
+  const style = borderStyle.rounded;
+  const innerWidth = width - 4;
+
+  const content = (
+    <InkBox flexDirection="column" paddingX={bordered ? 1 : 0} paddingY={bordered ? 1 : 0}>
+      {/* Header */}
+      <InkBox>
+        <Text color={config.color}>{config.icon} </Text>
+        <Text color={palette.text}>{message}</Text>
+        {code && (
+          <Text color={palette.textMuted}> [{code}]</Text>
+        )}
+      </InkBox>
+
+      {/* Details */}
+      {details && (
+        <InkBox marginTop={1}>
+          <Text color={palette.textTertiary}>{details}</Text>
+        </InkBox>
+      )}
+
+      {/* Suggestions */}
+      {suggestions.length > 0 && (
+        <InkBox flexDirection="column" marginTop={1}>
+          {suggestions.map((suggestion, i) => (
+            <InkBox key={i}>
+              <Text color={palette.textMuted}>{'\u2022'} </Text>
+              <Text color={palette.textSecondary}>{suggestion}</Text>
+            </InkBox>
+          ))}
+        </InkBox>
+      )}
+
+      {/* Recovery actions */}
+      {actions.length > 0 && (
+        <InkBox flexDirection="column" marginTop={1}>
+          <Text color={palette.textSecondary}>Recovery options:</Text>
+          {actions.map((action, i) => (
+            <InkBox key={i} marginLeft={2}>
+              <Text color={palette.textMuted}>[{i + 1}] </Text>
+              <Text color={action.primary ? palette.accent : palette.text}>
+                {action.command}
+              </Text>
+              {action.description && (
+                <Text color={palette.textTertiary}> - {action.description}</Text>
+              )}
+            </InkBox>
+          ))}
+        </InkBox>
+      )}
+    </InkBox>
+  );
+
+  if (!bordered) return content;
+
+  return (
+    <InkBox flexDirection="column" marginTop={1} marginBottom={1}>
+      {/* Top border with severity label */}
+      <Text>
+        <Text color={config.color}>{style.topLeft}</Text>
+        <Text color={config.color}>{style.horizontal}</Text>
+        <Text color={config.color}>{config.label}</Text>
+        <Text color={config.color}>
+          {style.horizontal.repeat(Math.max(0, width - config.label.length - 4))}
+        </Text>
+        <Text color={config.color}>{style.topRight}</Text>
+      </Text>
+
+      {/* Content */}
+      <InkBox flexDirection="row">
+        <Text color={config.color}>{style.vertical}</Text>
+        <InkBox width={innerWidth}>{content}</InkBox>
+        <Text color={config.color}>{style.vertical}</Text>
+      </InkBox>
+
+      {/* Bottom border */}
+      <Text color={config.color}>
+        {style.bottomLeft}
+        {style.horizontal.repeat(width - 2)}
+        {style.bottomRight}
+      </Text>
+    </InkBox>
+  );
+}
+
+// Enhanced error factories
+export const EnhancedErrors = {
+  symbolNotFound: (symbol: string): EnhancedErrorMessageProps => ({
+    message: `Symbol '${symbol}' not found`,
+    severity: 'error',
+    suggestions: [
+      'Check the symbol spelling',
+      'Make sure it\'s a valid stock or ETF ticker',
+    ],
+    actions: [
+      { label: 'Search', command: `search ${symbol}`, description: 'Search similar symbols', primary: true },
+      { label: 'Browse', command: 'screen tech', description: 'Browse tech stocks' },
+    ],
+  }),
+
+  networkError: (detail?: string): EnhancedErrorMessageProps => ({
+    message: detail || 'Network request failed',
+    severity: 'error',
+    details: 'Unable to connect to the data provider.',
+    suggestions: [
+      'Check your internet connection',
+      'The service may be temporarily unavailable',
+    ],
+    actions: [
+      { label: 'Retry', command: 'retry', primary: true },
+      { label: 'Status', command: 'pulse', description: 'Check system status' },
+    ],
+  }),
+
+  apiKeyMissing: (provider = 'AI'): EnhancedErrorMessageProps => ({
+    message: `${provider} API key not configured`,
+    code: 'API_KEY_MISSING',
+    severity: 'warning',
+    details: 'AI features require an API key to function.',
+    actions: [
+      { label: 'Setup', command: 'setup', description: 'Configure API keys', primary: true },
+    ],
+  }),
+
+  rateLimited: (waitSeconds?: number): EnhancedErrorMessageProps => ({
+    message: 'Rate limit exceeded',
+    code: 'RATE_LIMIT',
+    severity: 'warning',
+    details: waitSeconds
+      ? `Please wait ${waitSeconds} seconds before trying again.`
+      : 'Too many requests in a short time.',
+    suggestions: ['Wait a moment before retrying'],
+  }),
+
+  invalidInput: (field: string, reason: string): EnhancedErrorMessageProps => ({
+    message: `Invalid ${field}`,
+    severity: 'error',
+    details: reason,
+    actions: [
+      { label: 'Help', command: 'help', description: 'View available commands', primary: true },
+    ],
+  }),
+};
