@@ -488,6 +488,135 @@ export function timeframeToDays(timeframe: ChartTimeframe): number {
   return TIMEFRAME_CONFIG[timeframe].days;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Intraday Data (for live mode)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface IntradayBar {
+  time: Date;
+  price: number;
+  volume: number;
+}
+
+export interface IntradayData {
+  symbol: string;
+  bars: IntradayBar[];
+  dayOpen: number;
+  dayHigh: number;
+  dayLow: number;
+  currentPrice: number;
+  previousClose: number;
+  change: number;
+  changePercent: number;
+  volume: number;
+  avgVolume: number;
+  relativeVolume: number;
+  vwap: number;
+  marketState: 'PRE' | 'REGULAR' | 'POST' | 'CLOSED';
+}
+
+export async function getIntradayData(symbol: string): Promise<IntradayData | null> {
+  try {
+    // Fetch quote for current data
+    const quoteResult = await yahooFinance.quote(symbol);
+    if (!quoteResult) return null;
+
+    // Determine market hours (ET timezone)
+    const now = new Date();
+    const marketOpen = new Date(now);
+    marketOpen.setHours(9, 30, 0, 0); // 9:30 AM
+
+    // Fetch intraday chart data (5-minute intervals)
+    const chartResult = await yahooFinance.chart(symbol, {
+      period1: marketOpen,
+      period2: now,
+      interval: '5m',
+    });
+
+    const bars: IntradayBar[] = chartResult.quotes
+      .filter(q => q.date && q.close !== null && q.close !== undefined)
+      .map(q => ({
+        time: q.date!,
+        price: q.close!,
+        volume: q.volume ?? 0,
+      }));
+
+    // Calculate VWAP (Volume Weighted Average Price)
+    let vwapNumerator = 0;
+    let vwapDenominator = 0;
+    for (const bar of bars) {
+      vwapNumerator += bar.price * bar.volume;
+      vwapDenominator += bar.volume;
+    }
+    const vwap = vwapDenominator > 0 ? vwapNumerator / vwapDenominator : quoteResult.regularMarketPrice ?? 0;
+
+    // Determine market state
+    let marketState: 'PRE' | 'REGULAR' | 'POST' | 'CLOSED' = 'CLOSED';
+    const state = quoteResult.marketState;
+    if (state === 'PRE') marketState = 'PRE';
+    else if (state === 'REGULAR') marketState = 'REGULAR';
+    else if (state === 'POST' || state === 'POSTPOST') marketState = 'POST';
+
+    const avgVolume = quoteResult.averageDailyVolume3Month ?? quoteResult.averageDailyVolume10Day ?? 0;
+    const currentVolume = quoteResult.regularMarketVolume ?? 0;
+
+    return {
+      symbol: quoteResult.symbol,
+      bars,
+      dayOpen: quoteResult.regularMarketOpen ?? quoteResult.regularMarketPrice ?? 0,
+      dayHigh: quoteResult.regularMarketDayHigh ?? quoteResult.regularMarketPrice ?? 0,
+      dayLow: quoteResult.regularMarketDayLow ?? quoteResult.regularMarketPrice ?? 0,
+      currentPrice: quoteResult.regularMarketPrice ?? 0,
+      previousClose: quoteResult.regularMarketPreviousClose ?? 0,
+      change: quoteResult.regularMarketChange ?? 0,
+      changePercent: quoteResult.regularMarketChangePercent ?? 0,
+      volume: currentVolume,
+      avgVolume,
+      relativeVolume: avgVolume > 0 ? currentVolume / avgVolume : 0,
+      vwap,
+      marketState,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export interface MarketContext {
+  spy: { price: number; change: number; changePercent: number } | null;
+  qqq: { price: number; change: number; changePercent: number } | null;
+  vix: { value: number; change: number } | null;
+}
+
+export async function getMarketContextQuick(): Promise<MarketContext> {
+  try {
+    const quotes = await yahooFinance.quote(['SPY', 'QQQ', '^VIX']);
+    const arr = Array.isArray(quotes) ? quotes : [quotes];
+
+    const spyQuote = arr.find(q => q.symbol === 'SPY');
+    const qqqQuote = arr.find(q => q.symbol === 'QQQ');
+    const vixQuote = arr.find(q => q.symbol === '^VIX');
+
+    return {
+      spy: spyQuote ? {
+        price: spyQuote.regularMarketPrice ?? 0,
+        change: spyQuote.regularMarketChange ?? 0,
+        changePercent: spyQuote.regularMarketChangePercent ?? 0,
+      } : null,
+      qqq: qqqQuote ? {
+        price: qqqQuote.regularMarketPrice ?? 0,
+        change: qqqQuote.regularMarketChange ?? 0,
+        changePercent: qqqQuote.regularMarketChangePercent ?? 0,
+      } : null,
+      vix: vixQuote ? {
+        value: vixQuote.regularMarketPrice ?? 0,
+        change: vixQuote.regularMarketChange ?? 0,
+      } : null,
+    };
+  } catch {
+    return { spy: null, qqq: null, vix: null };
+  }
+}
+
 export function parseTimeframe(input: string): ChartTimeframe | null {
   const normalized = input.toLowerCase().trim();
   const valid: ChartTimeframe[] = ['1d', '5d', '1m', '3m', '6m', '1y', '5y'];
