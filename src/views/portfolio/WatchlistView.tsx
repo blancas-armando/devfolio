@@ -8,8 +8,8 @@ import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import type { Quote } from '../../types/index.js';
 import type { EventsCalendar } from '../../services/market.js';
+import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
-import { borders } from '../../design/borders.js';
 import { symbols } from '../../design/symbols.js';
 import { formatCurrency, formatPercent } from '../../utils/format.js';
 
@@ -24,7 +24,7 @@ function QuoteRow({ quote }: { quote: Quote }): React.ReactElement {
   const arrow = isUp ? symbols.arrowUp : symbols.arrowDown;
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={10}>
         <Text bold color={palette.text}>{quote.symbol}</Text>
       </InkBox>
@@ -34,43 +34,54 @@ function QuoteRow({ quote }: { quote: Quote }): React.ReactElement {
       <Text color={isUp ? semantic.positive : semantic.negative}>
         {arrow} {formatPercent(quote.changePercent)}
       </Text>
-    </InkBox>
+    </PanelRow>
   );
 }
 
 // Empty state component
 function EmptyWatchlist(): React.ReactElement {
   return (
-    <InkBox flexDirection="column" marginY={1} marginX={2}>
-      <Text color={palette.info}>Your watchlist is empty</Text>
-      <Text> </Text>
-      <Text color={palette.textTertiary}>Get started:</Text>
-      <InkBox marginLeft={2}>
-        <Text color={semantic.command}>add AAPL      </Text>
-        <Text color={palette.textTertiary}>Add Apple to your watchlist</Text>
-      </InkBox>
-      <InkBox marginLeft={2}>
-        <Text color={semantic.command}>add MSFT GOOGL</Text>
-        <Text color={palette.textTertiary}>Add multiple stocks at once</Text>
-      </InkBox>
-      <Text> </Text>
-      <Text color={palette.textTertiary}>Or explore the market:</Text>
-      <InkBox marginLeft={2}>
-        <Text color={semantic.command}>screen gainers</Text>
-        <Text color={palette.textTertiary}>See today's top gainers</Text>
-      </InkBox>
-      <InkBox marginLeft={2}>
-        <Text color={semantic.command}>b             </Text>
-        <Text color={palette.textTertiary}>Get an AI market brief</Text>
-      </InkBox>
-    </InkBox>
+    <Panel width={60} title="Watchlist">
+      <PanelRow>
+        <Text color={palette.info}>Your watchlist is empty</Text>
+      </PanelRow>
+      <PanelRow><Text> </Text></PanelRow>
+      <PanelRow>
+        <Text color={palette.textTertiary}>Get started:</Text>
+      </PanelRow>
+      <PanelRow>
+        <InkBox marginLeft={2}>
+          <Text color={semantic.command}>add AAPL      </Text>
+          <Text color={palette.textTertiary}>Add Apple to your watchlist</Text>
+        </InkBox>
+      </PanelRow>
+      <PanelRow>
+        <InkBox marginLeft={2}>
+          <Text color={semantic.command}>add MSFT GOOGL</Text>
+          <Text color={palette.textTertiary}>Add multiple stocks at once</Text>
+        </InkBox>
+      </PanelRow>
+      <PanelRow><Text> </Text></PanelRow>
+      <PanelRow>
+        <Text color={palette.textTertiary}>Or explore the market:</Text>
+      </PanelRow>
+      <PanelRow>
+        <InkBox marginLeft={2}>
+          <Text color={semantic.command}>screen gainers</Text>
+          <Text color={palette.textTertiary}>See today's top gainers</Text>
+        </InkBox>
+      </PanelRow>
+      <PanelRow>
+        <InkBox marginLeft={2}>
+          <Text color={semantic.command}>b             </Text>
+          <Text color={palette.textTertiary}>Get an AI market brief</Text>
+        </InkBox>
+      </PanelRow>
+    </Panel>
   );
 }
 
 export function WatchlistView({ quotes, calendar }: WatchlistViewProps): React.ReactElement {
-  const width = 58;
-  const line = borders.horizontal.repeat(width - 2);
-
   if (quotes.length === 0) {
     return <EmptyWatchlist />;
   }
@@ -80,17 +91,9 @@ export function WatchlistView({ quotes, calendar }: WatchlistViewProps): React.R
   const hasEvents = upcomingEarnings.length > 0 || upcomingDividends.length > 0;
 
   return (
-    <InkBox flexDirection="column" marginY={1}>
-      {/* Header */}
-      <Text color={palette.border}>{borders.topLeft}{line}{borders.topRight}</Text>
-      <InkBox>
-        <Text color={palette.border}>{borders.vertical} </Text>
-        <Text bold color={palette.text}>Watchlist</Text>
-      </InkBox>
-      <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-
+    <Panel width={60} title="Watchlist">
       {/* Column headers */}
-      <InkBox paddingX={2}>
+      <PanelRow>
         <InkBox width={10}>
           <Text color={palette.textTertiary}>Symbol</Text>
         </InkBox>
@@ -98,61 +101,45 @@ export function WatchlistView({ quotes, calendar }: WatchlistViewProps): React.R
           <Text color={palette.textTertiary}>Price</Text>
         </InkBox>
         <Text color={palette.textTertiary}>Change</Text>
-      </InkBox>
-      <InkBox paddingX={2}>
-        <Text color={palette.textTertiary}>{borders.horizontal.repeat(46)}</Text>
-      </InkBox>
+      </PanelRow>
 
       {/* Quotes */}
-      <InkBox flexDirection="column" paddingX={2}>
-        {quotes.map((quote) => (
-          <QuoteRow key={quote.symbol} quote={quote} />
-        ))}
-      </InkBox>
+      {quotes.map((quote) => (
+        <QuoteRow key={quote.symbol} quote={quote} />
+      ))}
 
       {/* Upcoming Events */}
       {hasEvents && (
-        <>
-          <InkBox paddingX={2} marginTop={1}>
-            <Text color={palette.textTertiary}>{borders.horizontal.repeat(46)}</Text>
-          </InkBox>
-          <InkBox paddingX={2}>
-            <Text bold color={semantic.command}>Upcoming Events</Text>
-          </InkBox>
-          <InkBox flexDirection="column" paddingX={2}>
-            {upcomingEarnings.map((e) => {
-              const dateStr = e.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-              return (
-                <InkBox key={`${e.symbol}-earnings`}>
-                  <Text color={palette.info}>E </Text>
-                  <InkBox width={8}>
-                    <Text color={palette.text}>{e.symbol}</Text>
-                  </InkBox>
-                  <Text color={palette.textTertiary}>Earnings </Text>
-                  <Text color={semantic.command}>{dateStr}</Text>
+        <Section title="Upcoming Events">
+          {upcomingEarnings.map((e) => {
+            const dateStr = e.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return (
+              <PanelRow key={`${e.symbol}-earnings`}>
+                <Text color={palette.info}>E </Text>
+                <InkBox width={8}>
+                  <Text color={palette.text}>{e.symbol}</Text>
                 </InkBox>
-              );
-            })}
-            {upcomingDividends.map((d) => {
-              const dateStr = d.exDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-              return (
-                <InkBox key={`${d.symbol}-dividend`}>
-                  <Text color={semantic.positive}>D </Text>
-                  <InkBox width={8}>
-                    <Text color={palette.text}>{d.symbol}</Text>
-                  </InkBox>
-                  <Text color={palette.textTertiary}>Ex-Div   </Text>
-                  <Text color={semantic.command}>{dateStr}</Text>
+                <Text color={palette.textTertiary}>Earnings </Text>
+                <Text color={semantic.command}>{dateStr}</Text>
+              </PanelRow>
+            );
+          })}
+          {upcomingDividends.map((d) => {
+            const dateStr = d.exDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return (
+              <PanelRow key={`${d.symbol}-dividend`}>
+                <Text color={semantic.positive}>D </Text>
+                <InkBox width={8}>
+                  <Text color={palette.text}>{d.symbol}</Text>
                 </InkBox>
-              );
-            })}
-          </InkBox>
-        </>
+                <Text color={palette.textTertiary}>Ex-Div   </Text>
+                <Text color={semantic.command}>{dateStr}</Text>
+              </PanelRow>
+            );
+          })}
+        </Section>
       )}
-
-      {/* Footer */}
-      <Text color={palette.border}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-    </InkBox>
+    </Panel>
   );
 }
 

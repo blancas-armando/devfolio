@@ -8,8 +8,8 @@
 import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import type { ETFProfile } from '../../types/index.js';
+import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
-import { borders } from '../../design/borders.js';
 import { symbols } from '../../design/symbols.js';
 
 export interface ETFComparisonProps {
@@ -37,14 +37,15 @@ function formatPrice(num: number): string {
 }
 
 // Comparison row
-function CompRow({ label, values, format, highlightBest }: {
+function CompRow({ label, values, format, highlightBest, etfCount }: {
   label: string;
   values: (string | number | null)[];
   format?: 'price' | 'pct' | 'pct2' | 'compact' | 'raw';
   highlightBest?: 'high' | 'low';
+  etfCount: number;
 }): React.ReactElement {
   const labelWidth = 16;
-  const colWidth = Math.floor((76 - labelWidth) / Math.max(values.length, 1));
+  const colWidth = Math.floor((72 - labelWidth) / Math.max(etfCount, 1));
 
   const formatValue = (val: string | number | null): string => {
     if (val === null) return '--';
@@ -70,7 +71,7 @@ function CompRow({ label, values, format, highlightBest }: {
   }
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={labelWidth}>
         <Text color={palette.textTertiary}>{label}</Text>
       </InkBox>
@@ -81,37 +82,21 @@ function CompRow({ label, values, format, highlightBest }: {
           </Text>
         </InkBox>
       ))}
-    </InkBox>
-  );
-}
-
-// Section header
-function SectionHeader({ title, width }: { title: string; width: number }): React.ReactElement {
-  const line = borders.horizontal.repeat(width - title.length - 5);
-  return (
-    <InkBox>
-      <Text color={palette.info}>
-        {borders.leftTee}{borders.horizontal} {title} {line}{borders.rightTee}
-      </Text>
-    </InkBox>
+    </PanelRow>
   );
 }
 
 export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElement {
-  const width = 78;
-  const line = borders.horizontal.repeat(width - 2);
   const labelWidth = 16;
-  const colWidth = Math.floor((76 - labelWidth) / Math.max(etfs.length, 1));
+  const colWidth = Math.floor((72 - labelWidth) / Math.max(etfs.length, 1));
 
   if (etfs.length === 0) {
     return (
-      <InkBox flexDirection="column" marginY={1}>
-        <Text color={palette.info}>{borders.topLeft}{line}{borders.topRight}</Text>
-        <InkBox paddingX={1}>
+      <Panel width={78} title="ETF Comparison">
+        <PanelRow>
           <Text color={palette.textTertiary}>No ETFs to compare</Text>
-        </InkBox>
-        <Text color={palette.info}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-      </InkBox>
+        </PanelRow>
+      </Panel>
     );
   }
 
@@ -121,16 +106,9 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
   const sectorList = Array.from(allSectors).slice(0, 6);
 
   return (
-    <InkBox flexDirection="column" marginY={1}>
-      {/* Header */}
-      <Text color={palette.info}>{borders.topLeft}{line}{borders.topRight}</Text>
-      <InkBox paddingX={1}>
-        <Text bold color={palette.text}>ETF Comparison</Text>
-      </InkBox>
-
+    <Panel width={78} title="ETF Comparison">
       {/* Symbol row */}
-      <Text color={palette.info}>{borders.leftTee}{line}{borders.rightTee}</Text>
-      <InkBox paddingX={1}>
+      <PanelRow>
         <InkBox width={labelWidth}>
           <Text color={palette.textTertiary}>Symbol</Text>
         </InkBox>
@@ -139,10 +117,10 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
             <Text bold color={palette.text}>{e.symbol}</Text>
           </InkBox>
         ))}
-      </InkBox>
+      </PanelRow>
 
       {/* Names */}
-      <InkBox paddingX={1}>
+      <PanelRow>
         <InkBox width={labelWidth}>
           <Text color={palette.textTertiary}>Name</Text>
         </InkBox>
@@ -153,10 +131,10 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
             </Text>
           </InkBox>
         ))}
-      </InkBox>
+      </PanelRow>
 
       {/* Category */}
-      <InkBox paddingX={1}>
+      <PanelRow>
         <InkBox width={labelWidth}>
           <Text color={palette.textTertiary}>Category</Text>
         </InkBox>
@@ -167,13 +145,12 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
             </Text>
           </InkBox>
         ))}
-      </InkBox>
+      </PanelRow>
 
       {/* Price & Change */}
-      <SectionHeader title="Price" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Price" values={etfs.map(e => e.price)} format="price" />
-        <InkBox>
+      <Section title="Price">
+        <CompRow label="Price" values={etfs.map(e => e.price)} format="price" etfCount={etfs.length} />
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>Change</Text>
           </InkBox>
@@ -184,22 +161,20 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
               </Text>
             </InkBox>
           ))}
-        </InkBox>
-      </InkBox>
+        </PanelRow>
+      </Section>
 
       {/* Key Metrics */}
-      <SectionHeader title="Key Metrics" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Expense Ratio" values={etfs.map(e => e.expenseRatio)} format="pct2" highlightBest="low" />
-        <CompRow label="Dividend Yield" values={etfs.map(e => e.yield)} format="pct2" highlightBest="high" />
-        <CompRow label="AUM" values={etfs.map(e => e.totalAssets)} format="compact" highlightBest="high" />
-        <CompRow label="Holdings" values={etfs.map(e => e.holdingsCount)} format="raw" />
-      </InkBox>
+      <Section title="Key Metrics">
+        <CompRow label="Expense Ratio" values={etfs.map(e => e.expenseRatio)} format="pct2" highlightBest="low" etfCount={etfs.length} />
+        <CompRow label="Dividend Yield" values={etfs.map(e => e.yield)} format="pct2" highlightBest="high" etfCount={etfs.length} />
+        <CompRow label="AUM" values={etfs.map(e => e.totalAssets)} format="compact" highlightBest="high" etfCount={etfs.length} />
+        <CompRow label="Holdings" values={etfs.map(e => e.holdingsCount)} format="raw" etfCount={etfs.length} />
+      </Section>
 
       {/* Performance */}
-      <SectionHeader title="Performance" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <InkBox>
+      <Section title="Performance">
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>YTD</Text>
           </InkBox>
@@ -210,8 +185,8 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
               </Text>
             </InkBox>
           ))}
-        </InkBox>
-        <InkBox>
+        </PanelRow>
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>1 Year</Text>
           </InkBox>
@@ -222,8 +197,8 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
               </Text>
             </InkBox>
           ))}
-        </InkBox>
-        <InkBox>
+        </PanelRow>
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>3 Year</Text>
           </InkBox>
@@ -234,8 +209,8 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
               </Text>
             </InkBox>
           ))}
-        </InkBox>
-        <InkBox>
+        </PanelRow>
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>5 Year</Text>
           </InkBox>
@@ -246,46 +221,41 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
               </Text>
             </InkBox>
           ))}
-        </InkBox>
-      </InkBox>
+        </PanelRow>
+      </Section>
 
       {/* Risk */}
-      <SectionHeader title="Risk" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Beta" values={etfs.map(e => e.beta)} format="raw" />
-        <CompRow label="Sharpe Ratio" values={etfs.map(e => e.sharpeRatio)} format="raw" highlightBest="high" />
-      </InkBox>
+      <Section title="Risk">
+        <CompRow label="Beta" values={etfs.map(e => e.beta)} format="raw" etfCount={etfs.length} />
+        <CompRow label="Sharpe Ratio" values={etfs.map(e => e.sharpeRatio)} format="raw" highlightBest="high" etfCount={etfs.length} />
+      </Section>
 
       {/* Asset Allocation */}
-      <SectionHeader title="Asset Allocation" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Stocks" values={etfs.map(e => e.stockPosition)} format="pct" />
-        <CompRow label="Bonds" values={etfs.map(e => e.bondPosition)} format="pct" />
-        <CompRow label="Cash" values={etfs.map(e => e.cashPosition)} format="pct" />
-      </InkBox>
+      <Section title="Asset Allocation">
+        <CompRow label="Stocks" values={etfs.map(e => e.stockPosition)} format="pct" etfCount={etfs.length} />
+        <CompRow label="Bonds" values={etfs.map(e => e.bondPosition)} format="pct" etfCount={etfs.length} />
+        <CompRow label="Cash" values={etfs.map(e => e.cashPosition)} format="pct" etfCount={etfs.length} />
+      </Section>
 
       {/* Sector Weights */}
       {sectorList.length > 0 && (
-        <>
-          <SectionHeader title="Top Sectors" width={width} />
-          <InkBox flexDirection="column" paddingX={1}>
-            {sectorList.map((sector) => (
-              <CompRow
-                key={sector}
-                label={sector.length > 14 ? sector.substring(0, 12) + '..' : sector}
-                values={etfs.map(e => e.sectorWeights[sector] ?? null)}
-                format="pct"
-              />
-            ))}
-          </InkBox>
-        </>
+        <Section title="Top Sectors">
+          {sectorList.map((sector) => (
+            <CompRow
+              key={sector}
+              label={sector.length > 14 ? sector.substring(0, 12) + '..' : sector}
+              values={etfs.map(e => e.sectorWeights[sector] ?? null)}
+              format="pct"
+              etfCount={etfs.length}
+            />
+          ))}
+        </Section>
       )}
 
       {/* Top Holdings */}
-      <SectionHeader title="Top 3 Holdings" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
+      <Section title="Top 3 Holdings">
         {[0, 1, 2].map((idx) => (
-          <InkBox key={idx}>
+          <PanelRow key={idx}>
             <InkBox width={labelWidth}>
               <Text color={palette.textTertiary}>#{idx + 1}</Text>
             </InkBox>
@@ -303,18 +273,17 @@ export function ETFComparisonView({ etfs }: ETFComparisonProps): React.ReactElem
                 </InkBox>
               );
             })}
-          </InkBox>
+          </PanelRow>
         ))}
-      </InkBox>
+      </Section>
 
       {/* Footer */}
-      <InkBox paddingX={1} marginTop={1}>
+      <PanelRow>
         <Text color={palette.textTertiary}>
           Best values highlighted {symbols.bullet} Lower expense ratios are better
         </Text>
-      </InkBox>
-      <Text color={palette.info}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-    </InkBox>
+      </PanelRow>
+    </Panel>
   );
 }
 

@@ -24,7 +24,26 @@ import { showHint } from '../hints.js';
 // Company Profile Display
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function displayCompanyProfile(profile: CompanyProfile, quickTake?: QuickTake | null, relatedStocks?: RelatedStock[]): void {
+// Map timeframe to readable label
+const TIMEFRAME_LABELS: Record<string, string> = {
+  '1d': '1 day',
+  '5d': '5 days',
+  '1m': '1 month',
+  '3m': '3 months',
+  '6m': '6 months',
+  '1y': '1 year',
+  '5y': '5 years',
+  '10y': '10 years',
+  'max': 'all time',
+  'all': 'all time',
+};
+
+export function displayCompanyProfile(
+  profile: CompanyProfile,
+  quickTake?: QuickTake | null,
+  relatedStocks?: RelatedStock[],
+  timeframe?: string
+): void {
   const width = 60;
   const innerWidth = width - 4;
 
@@ -184,8 +203,9 @@ export function displayCompanyProfile(profile: CompanyProfile, quickTake?: Quick
 
   // Price Chart Section
   if (profile.historicalPrices && profile.historicalPrices.length > 10) {
+    const chartLabel = `Price Chart (${TIMEFRAME_LABELS[timeframe ?? '3m'] ?? '90 days'})`;
     console.log(chalk.dim('├' + '─'.repeat(width - 2) + '┤'));
-    console.log(chalk.dim('│') + ' ' + chalk.bold.yellow('Price Chart (90 days)'.padEnd(innerWidth)) + ' ' + chalk.dim('│'));
+    console.log(chalk.dim('│') + ' ' + chalk.bold.yellow(chartLabel.padEnd(innerWidth)) + ' ' + chalk.dim('│'));
     console.log(chalk.dim('├' + '─'.repeat(width - 2) + '┤'));
 
     // Determine trend for color

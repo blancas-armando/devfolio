@@ -8,9 +8,8 @@
 import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import type { MarketBrief, MarketNarrative } from '../../services/brief.js';
-import type { MarketBriefData } from '../../services/market.js';
+import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
-import { borders } from '../../design/borders.js';
 import { symbols } from '../../design/symbols.js';
 
 export interface MarketBriefProps {
@@ -26,18 +25,6 @@ function formatLargeNumber(num: number | null): string {
   return `$${num.toLocaleString()}`;
 }
 
-// Section header component
-function SectionHeader({ title, width }: { title: string; width: number }): React.ReactElement {
-  const line = borders.horizontal.repeat(width - title.length - 5);
-  return (
-    <InkBox>
-      <Text color={palette.info}>
-        {borders.leftTee}{borders.horizontal} {title} {line}{borders.rightTee}
-      </Text>
-    </InkBox>
-  );
-}
-
 // Index row component
 function IndexRow({ name, price, changePercent, weekChange }: {
   name: string;
@@ -50,26 +37,24 @@ function IndexRow({ name, price, changePercent, weekChange }: {
   const priceStr = price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={14}>
         <Text color={palette.text}>{name}</Text>
       </InkBox>
-      <InkBox width={12} justifyContent="flex-end">
+      <InkBox width={12}>
         <Text color={palette.text}>{priceStr}</Text>
       </InkBox>
-      <InkBox width={10} marginLeft={2}>
+      <InkBox width={10}>
         <Text color={isUp ? semantic.positive : semantic.negative}>
           {arrow} {isUp ? '+' : ''}{changePercent.toFixed(2)}%
         </Text>
       </InkBox>
       {weekChange !== null && (
-        <InkBox marginLeft={2}>
-          <Text color={palette.textTertiary}>
-            {weekChange >= 0 ? '+' : ''}{weekChange.toFixed(1)}% wk
-          </Text>
-        </InkBox>
+        <Text color={palette.textTertiary}>
+          {weekChange >= 0 ? '+' : ''}{weekChange.toFixed(1)}% wk
+        </Text>
       )}
-    </InkBox>
+    </PanelRow>
   );
 }
 
@@ -84,7 +69,7 @@ function IndicatorRow({ name, value, changePercent, unit }: {
   const valueStr = unit === '%' ? `${value.toFixed(2)}%` : `$${value.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={12}>
         <Text color={palette.textTertiary}>{name}</Text>
       </InkBox>
@@ -92,7 +77,7 @@ function IndicatorRow({ name, value, changePercent, unit }: {
       <Text color={isUp ? semantic.positive : semantic.negative}>
         ({isUp ? '+' : ''}{changePercent.toFixed(1)}%)
       </Text>
-    </InkBox>
+    </PanelRow>
   );
 }
 
@@ -107,7 +92,7 @@ function MoverRow({ symbol, name, changePercent, price }: {
   const arrow = isUp ? symbols.arrowUp : symbols.arrowDown;
 
   return (
-    <InkBox>
+    <PanelRow>
       <Text color={isUp ? semantic.positive : semantic.negative}>{arrow} </Text>
       <InkBox width={8}>
         <Text color={palette.text}>{symbol}</Text>
@@ -121,43 +106,47 @@ function MoverRow({ symbol, name, changePercent, price }: {
         <Text color={palette.textTertiary}>${price.toFixed(2)}</Text>
       </InkBox>
       <Text color={palette.textTertiary}>{name.substring(0, 25)}</Text>
-    </InkBox>
+    </PanelRow>
   );
 }
 
 // AI Narrative section
 function NarrativeSection({ narrative }: { narrative: MarketNarrative }): React.ReactElement {
   return (
-    <InkBox flexDirection="column" paddingX={1}>
-      <Text bold color={palette.accent}>{narrative.headline}</Text>
-      <InkBox marginTop={1}>
-        <Text color={palette.text} wrap="wrap">{narrative.summary}</Text>
-      </InkBox>
-      {narrative.sectorAnalysis && (
-        <InkBox marginTop={1}>
-          <Text color={palette.textSecondary} wrap="wrap">{narrative.sectorAnalysis}</Text>
+    <>
+      <PanelRow>
+        <Text bold color={palette.accent}>{narrative.headline}</Text>
+      </PanelRow>
+      <PanelRow>
+        <InkBox width={72}>
+          <Text color={palette.text} wrap="wrap">{narrative.summary}</Text>
         </InkBox>
+      </PanelRow>
+      {narrative.sectorAnalysis && (
+        <PanelRow>
+          <InkBox width={72}>
+            <Text color={palette.textSecondary} wrap="wrap">{narrative.sectorAnalysis}</Text>
+          </InkBox>
+        </PanelRow>
       )}
       {narrative.keyThemes.length > 0 && (
-        <InkBox marginTop={1}>
+        <PanelRow>
           <Text color={palette.textTertiary}>Themes: </Text>
           <Text color={palette.info}>{narrative.keyThemes.join(' | ')}</Text>
-        </InkBox>
+        </PanelRow>
       )}
       {narrative.outlook && (
-        <InkBox marginTop={1}>
+        <PanelRow>
           <Text color={palette.textTertiary}>Outlook: </Text>
           <Text color={palette.text}>{narrative.outlook}</Text>
-        </InkBox>
+        </PanelRow>
       )}
-    </InkBox>
+    </>
   );
 }
 
 export function MarketBriefView({ brief }: MarketBriefProps): React.ReactElement {
   const { data, narrative } = brief;
-  const width = 78;
-  const line = borders.horizontal.repeat(width - 2);
   const today = data.asOfDate.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -166,45 +155,38 @@ export function MarketBriefView({ brief }: MarketBriefProps): React.ReactElement
   });
 
   return (
-    <InkBox flexDirection="column" marginY={1}>
-      {/* Header */}
-      <Text color={palette.info}>{borders.topLeft}{line}{borders.topRight}</Text>
-      <InkBox justifyContent="space-between" paddingX={1}>
-        <Text bold color={palette.text}>MARKET BRIEF</Text>
+    <Panel width={78} title="MARKET BRIEF">
+      {/* Date header */}
+      <PanelRow>
         <Text color={palette.textTertiary}>{today}</Text>
-      </InkBox>
+      </PanelRow>
 
       {/* AI Narrative */}
       {narrative && (
-        <>
-          <SectionHeader title="AI Summary" width={width} />
+        <Section title="AI Summary">
           <NarrativeSection narrative={narrative} />
-        </>
+        </Section>
       )}
 
       {/* Major Indices */}
       {data.indices.length > 0 && (
-        <>
-          <SectionHeader title="Major Indices" width={width} />
-          <InkBox flexDirection="column" paddingX={2}>
-            {data.indices.map((idx) => (
-              <IndexRow
-                key={idx.symbol}
-                name={idx.name}
-                price={idx.price}
-                changePercent={idx.changePercent}
-                weekChange={idx.weekChange}
-              />
-            ))}
-          </InkBox>
-        </>
+        <Section title="Major Indices">
+          {data.indices.map((idx) => (
+            <IndexRow
+              key={idx.symbol}
+              name={idx.name}
+              price={idx.price}
+              changePercent={idx.changePercent}
+              weekChange={idx.weekChange}
+            />
+          ))}
+        </Section>
       )}
 
       {/* Market Indicators */}
-      <SectionHeader title="Indicators" width={width} />
-      <InkBox flexDirection="column" paddingX={2}>
+      <Section title="Indicators">
         {data.indicators.vix && (
-          <InkBox>
+          <PanelRow>
             <InkBox width={12}>
               <Text color={palette.textTertiary}>VIX</Text>
             </InkBox>
@@ -212,7 +194,7 @@ export function MarketBriefView({ brief }: MarketBriefProps): React.ReactElement
               {data.indicators.vix.value.toFixed(2)}
             </Text>
             <Text color={palette.textTertiary}> (Fear/Greed)</Text>
-          </InkBox>
+          </PanelRow>
         )}
         {data.indicators.treasury10Y && (
           <IndicatorRow
@@ -243,13 +225,12 @@ export function MarketBriefView({ brief }: MarketBriefProps): React.ReactElement
             changePercent={data.indicators.bitcoin.changePercent}
           />
         )}
-      </InkBox>
+      </Section>
 
       {/* Sectors */}
       {data.sectors.length > 0 && (
-        <>
-          <SectionHeader title="Sector Performance" width={width} />
-          <InkBox paddingX={2} flexWrap="wrap">
+        <Section title="Sector Performance">
+          <PanelRow>
             {data.sectors.map((sec, i) => (
               <React.Fragment key={sec.symbol}>
                 {i > 0 && <Text>  </Text>}
@@ -258,48 +239,42 @@ export function MarketBriefView({ brief }: MarketBriefProps): React.ReactElement
                 </Text>
               </React.Fragment>
             ))}
-          </InkBox>
-        </>
+          </PanelRow>
+        </Section>
       )}
 
       {/* Top Gainers */}
       {data.gainers.length > 0 && (
-        <>
-          <SectionHeader title="Top Gainers" width={width} />
-          <InkBox flexDirection="column" paddingX={2}>
-            {data.gainers.slice(0, 5).map((m) => (
-              <MoverRow
-                key={m.symbol}
-                symbol={m.symbol}
-                name={m.name}
-                changePercent={m.changePercent}
-                price={m.price}
-              />
-            ))}
-          </InkBox>
-        </>
+        <Section title="Top Gainers">
+          {data.gainers.slice(0, 5).map((m) => (
+            <MoverRow
+              key={m.symbol}
+              symbol={m.symbol}
+              name={m.name}
+              changePercent={m.changePercent}
+              price={m.price}
+            />
+          ))}
+        </Section>
       )}
 
       {/* Top Losers */}
       {data.losers.length > 0 && (
-        <>
-          <SectionHeader title="Top Losers" width={width} />
-          <InkBox flexDirection="column" paddingX={2}>
-            {data.losers.slice(0, 5).map((m) => (
-              <MoverRow
-                key={m.symbol}
-                symbol={m.symbol}
-                name={m.name}
-                changePercent={m.changePercent}
-                price={m.price}
-              />
-            ))}
-          </InkBox>
-        </>
+        <Section title="Top Losers">
+          {data.losers.slice(0, 5).map((m) => (
+            <MoverRow
+              key={m.symbol}
+              symbol={m.symbol}
+              name={m.name}
+              changePercent={m.changePercent}
+              price={m.price}
+            />
+          ))}
+        </Section>
       )}
 
       {/* Market Breadth */}
-      <InkBox paddingX={2}>
+      <PanelRow>
         <Text color={palette.textTertiary}>Breadth: </Text>
         <Text color={semantic.positive}>{data.breadth.advancing} advancing</Text>
         <Text color={palette.textTertiary}> / </Text>
@@ -310,60 +285,53 @@ export function MarketBriefView({ brief }: MarketBriefProps): React.ReactElement
             <Text color={palette.textTertiary}>{data.breadth.unchanged} unchanged</Text>
           </>
         )}
-      </InkBox>
+      </PanelRow>
 
       {/* Upcoming Earnings */}
       {data.upcomingEarnings.length > 0 && (
-        <>
-          <SectionHeader title="Upcoming Earnings" width={width} />
-          <InkBox flexDirection="column" paddingX={2}>
-            {data.upcomingEarnings.slice(0, 4).map((e) => (
-              <InkBox key={e.symbol}>
-                <InkBox width={8}>
-                  <Text color={palette.text}>{e.symbol}</Text>
-                </InkBox>
-                <InkBox width={14}>
-                  <Text color={palette.textTertiary}>
-                    {e.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </Text>
-                </InkBox>
-                {e.estimate !== null && (
-                  <Text color={palette.textTertiary}>Est: ${e.estimate.toFixed(2)}</Text>
-                )}
-                {e.marketCap && (
-                  <Text color={palette.textTertiary}> ({formatLargeNumber(e.marketCap)})</Text>
-                )}
+        <Section title="Upcoming Earnings">
+          {data.upcomingEarnings.slice(0, 4).map((e) => (
+            <PanelRow key={e.symbol}>
+              <InkBox width={8}>
+                <Text color={palette.text}>{e.symbol}</Text>
               </InkBox>
-            ))}
-          </InkBox>
-        </>
+              <InkBox width={14}>
+                <Text color={palette.textTertiary}>
+                  {e.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </Text>
+              </InkBox>
+              {e.estimate !== null && (
+                <Text color={palette.textTertiary}>Est: ${e.estimate.toFixed(2)}</Text>
+              )}
+              {e.marketCap && (
+                <Text color={palette.textTertiary}> ({formatLargeNumber(e.marketCap)})</Text>
+              )}
+            </PanelRow>
+          ))}
+        </Section>
       )}
 
       {/* Top News */}
       {data.topNews.length > 0 && (
-        <>
-          <SectionHeader title="Headlines" width={width} />
-          <InkBox flexDirection="column" paddingX={2}>
-            {data.topNews.slice(0, 4).map((news, i) => (
-              <InkBox key={i}>
-                <Text color={palette.textTertiary}>{symbols.bullet} </Text>
-                <Text color={palette.text}>
-                  {news.title.length > 65 ? news.title.substring(0, 62) + '...' : news.title}
-                </Text>
-              </InkBox>
-            ))}
-          </InkBox>
-        </>
+        <Section title="Headlines">
+          {data.topNews.slice(0, 4).map((news, i) => (
+            <PanelRow key={i}>
+              <Text color={palette.textTertiary}>{symbols.bullet} </Text>
+              <Text color={palette.text}>
+                {news.title.length > 65 ? news.title.substring(0, 62) + '...' : news.title}
+              </Text>
+            </PanelRow>
+          ))}
+        </Section>
       )}
 
       {/* Footer */}
-      <InkBox paddingX={1} marginTop={1}>
+      <PanelRow>
         <Text color={palette.textTertiary}>
           Generated at {data.asOfDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
         </Text>
-      </InkBox>
-      <Text color={palette.info}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-    </InkBox>
+      </PanelRow>
+    </Panel>
   );
 }
 

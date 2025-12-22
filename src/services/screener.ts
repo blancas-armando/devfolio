@@ -36,6 +36,7 @@ export interface ScreenerResult {
   marketCap: number | null;
   peRatio: number | null;
   volume: number | null;
+  dividendYield: number | null;  // For income investors
   sector: string | null;
 }
 
@@ -175,6 +176,7 @@ export async function runScreener(
         marketCap: q.marketCap || null,
         peRatio: q.trailingPE || null,
         volume: q.regularMarketVolume || null,
+        dividendYield: q.trailingAnnualDividendYield || null,
         sector: null,
       }));
     } else if (config.etfSymbol) {
@@ -232,6 +234,7 @@ async function getSectorStocks(etfSymbol: string, count: number): Promise<Screen
         marketCap: q.marketCap || null,
         peRatio: q.trailingPE || null,
         volume: q.regularMarketVolume || null,
+        dividendYield: q.trailingAnnualDividendYield || null,
         sector: null,
       }))
       .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));

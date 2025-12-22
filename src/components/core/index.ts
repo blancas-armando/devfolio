@@ -79,3 +79,17 @@ export {
   type KeyHintProps,
   type KeyHintGroupProps,
 } from './KeyHint.js';
+
+// Panel components (bordered containers with sections)
+export {
+  Panel,
+  PanelRow,
+  Section,
+  PanelContext,
+  usePanelContext,
+  type PanelProps,
+  type PanelRowProps,
+  type PanelWidth,
+  type SectionProps,
+  type PanelContextValue,
+} from './Panel/index.js';

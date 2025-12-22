@@ -8,8 +8,8 @@
 import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import type { MarketPulse, PulseAlert, AlertSeverity, MarketStatus } from '../../services/pulse.js';
+import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
-import { borders } from '../../design/borders.js';
 import { symbols } from '../../design/symbols.js';
 
 export interface MarketPulseProps {
@@ -45,18 +45,6 @@ function getAlertColor(severity: AlertSeverity): string {
   }
 }
 
-// Section header component
-function SectionHeader({ title, width }: { title: string; width: number }): React.ReactElement {
-  const line = borders.horizontal.repeat(width - title.length - 5);
-  return (
-    <InkBox>
-      <Text color={palette.info}>
-        {borders.leftTee}{borders.horizontal} {title} {line}{borders.rightTee}
-      </Text>
-    </InkBox>
-  );
-}
-
 // Index row component
 function IndexRow({ name, price, changePercent, nearHigh, nearLow }: {
   name: string;
@@ -71,21 +59,21 @@ function IndexRow({ name, price, changePercent, nearHigh, nearLow }: {
   const changeStr = `${isUp ? '+' : ''}${changePercent.toFixed(2)}%`;
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={16}>
         <Text color={palette.text}>{name}</Text>
       </InkBox>
-      <InkBox width={14} justifyContent="flex-end">
+      <InkBox width={14}>
         <Text color={palette.text}>{priceStr}</Text>
       </InkBox>
-      <InkBox width={12} marginLeft={2}>
+      <InkBox width={12}>
         <Text color={isUp ? semantic.positive : semantic.negative}>
           {arrow} {changeStr}
         </Text>
       </InkBox>
       {nearHigh && <Text color={palette.textTertiary}> [near high]</Text>}
       {nearLow && <Text color={palette.textTertiary}> [near low]</Text>}
-    </InkBox>
+    </PanelRow>
   );
 }
 
@@ -100,7 +88,7 @@ function MoverRow({ symbol, name, changePercent }: {
   const pctStr = `${isUp ? '+' : ''}${changePercent.toFixed(1)}%`;
 
   return (
-    <InkBox>
+    <PanelRow>
       <Text color={isUp ? semantic.positive : semantic.negative}>{arrow} </Text>
       <InkBox width={8}>
         <Text color={palette.text}>{symbol}</Text>
@@ -109,7 +97,7 @@ function MoverRow({ symbol, name, changePercent }: {
         <Text color={isUp ? semantic.positive : semantic.negative}>{pctStr}</Text>
       </InkBox>
       <Text color={palette.textTertiary}>{name.substring(0, 40)}</Text>
-    </InkBox>
+    </PanelRow>
   );
 }
 
@@ -117,36 +105,29 @@ function MoverRow({ symbol, name, changePercent }: {
 function AlertRow({ alert }: { alert: PulseAlert }): React.ReactElement {
   const color = getAlertColor(alert.severity);
   return (
-    <InkBox>
+    <PanelRow>
       <Text color={color}>{symbols.bullet} </Text>
       <Text color={color}>{alert.title}</Text>
       <Text color={palette.textTertiary}>  {alert.detail}</Text>
-    </InkBox>
+    </PanelRow>
   );
 }
 
 export function MarketPulseView({ pulse }: MarketPulseProps): React.ReactElement {
-  const width = 72;
-  const line = borders.horizontal.repeat(width - 2);
   const time = pulse.asOfDate.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
 
   return (
-    <InkBox flexDirection="column" marginY={1}>
-      {/* Header */}
-      <Text color={palette.info}>{borders.topLeft}{line}{borders.topRight}</Text>
-      <InkBox justifyContent="space-between" paddingX={1}>
-        <Text bold color={palette.text}>MARKET PULSE</Text>
-        <InkBox>
-          <Text color={getStatusColor(pulse.marketStatus)}>{getStatusLabel(pulse.marketStatus)}</Text>
-          <Text color={palette.textTertiary}> {time}</Text>
-        </InkBox>
-      </InkBox>
+    <Panel width={72} title="MARKET PULSE">
+      {/* Status header */}
+      <PanelRow>
+        <Text color={getStatusColor(pulse.marketStatus)}>{getStatusLabel(pulse.marketStatus)}</Text>
+        <Text color={palette.textTertiary}> {time}</Text>
+      </PanelRow>
 
       {/* Futures (pre-market) */}
       {pulse.futures && pulse.futures.length > 0 && (
-        <>
-          <SectionHeader title="Futures" width={width} />
-          <InkBox paddingX={2}>
+        <Section title="Futures">
+          <PanelRow>
             {pulse.futures.map((f, i) => (
               <React.Fragment key={f.symbol}>
                 {i > 0 && <Text>    </Text>}
@@ -157,13 +138,12 @@ export function MarketPulseView({ pulse }: MarketPulseProps): React.ReactElement
                 </Text>
               </React.Fragment>
             ))}
-          </InkBox>
-        </>
+          </PanelRow>
+        </Section>
       )}
 
       {/* Indices */}
-      <SectionHeader title="Indices" width={width} />
-      <InkBox flexDirection="column" paddingX={2}>
+      <Section title="Indices">
         {pulse.indices.map((idx) => {
           let nearHigh = false;
           let nearLow = false;
@@ -184,10 +164,10 @@ export function MarketPulseView({ pulse }: MarketPulseProps): React.ReactElement
             />
           );
         })}
-      </InkBox>
+      </Section>
 
       {/* Indicators row (VIX, DXY, Breadth) */}
-      <InkBox paddingX={2}>
+      <PanelRow>
         {pulse.vix !== null && (
           <>
             <Text color={palette.text}>VIX </Text>
@@ -217,14 +197,13 @@ export function MarketPulseView({ pulse }: MarketPulseProps): React.ReactElement
         }>
           ({pulse.breadth.declining > 0 ? (pulse.breadth.advancing / pulse.breadth.declining).toFixed(1) : '>'}:1)
         </Text>
-      </InkBox>
+      </PanelRow>
 
       {/* Sectors */}
       {(pulse.topSectors.length > 0 || pulse.bottomSectors.length > 0) && (
-        <>
-          <SectionHeader title="Sectors" width={width} />
+        <Section title="Sectors">
           {pulse.topSectors.length > 0 && (
-            <InkBox paddingX={2}>
+            <PanelRow>
               <Text color={palette.textTertiary}>{symbols.arrowUp} </Text>
               {pulse.topSectors.map((s, i) => (
                 <React.Fragment key={s.name}>
@@ -234,10 +213,10 @@ export function MarketPulseView({ pulse }: MarketPulseProps): React.ReactElement
                   </Text>
                 </React.Fragment>
               ))}
-            </InkBox>
+            </PanelRow>
           )}
           {pulse.bottomSectors.length > 0 && (
-            <InkBox paddingX={2}>
+            <PanelRow>
               <Text color={palette.textTertiary}>{symbols.arrowDown} </Text>
               {pulse.bottomSectors.map((s, i) => (
                 <React.Fragment key={s.name}>
@@ -247,55 +226,51 @@ export function MarketPulseView({ pulse }: MarketPulseProps): React.ReactElement
                   </Text>
                 </React.Fragment>
               ))}
-            </InkBox>
+            </PanelRow>
           )}
-        </>
+        </Section>
       )}
 
       {/* Top Movers */}
       {pulse.topMovers.length > 0 && (
-        <>
-          <SectionHeader title="Top Movers" width={width} />
-          <InkBox flexDirection="column" paddingX={2}>
-            {pulse.topMovers.slice(0, 5).map((m) => (
-              <MoverRow
-                key={m.symbol}
-                symbol={m.symbol}
-                name={m.name}
-                changePercent={m.changePercent}
-              />
-            ))}
-          </InkBox>
-        </>
+        <Section title="Top Movers">
+          {pulse.topMovers.slice(0, 5).map((m) => (
+            <MoverRow
+              key={m.symbol}
+              symbol={m.symbol}
+              name={m.name}
+              changePercent={m.changePercent}
+            />
+          ))}
+        </Section>
       )}
 
       {/* Top Headline */}
       {pulse.topHeadline && (
-        <>
-          <SectionHeader title="Headline" width={width} />
-          <InkBox paddingX={2}>
+        <Section title="Headline">
+          <PanelRow>
             <Text color={palette.text}>
               {pulse.topHeadline.length > 65 ? pulse.topHeadline.substring(0, 62) + '...' : pulse.topHeadline}
             </Text>
-          </InkBox>
-        </>
+          </PanelRow>
+        </Section>
       )}
 
       {/* AI Take */}
       {pulse.aiTake && (
-        <>
-          <SectionHeader title="AI Take" width={width} />
-          <InkBox paddingX={2}>
-            <Text color={palette.text} wrap="wrap">{pulse.aiTake}</Text>
-          </InkBox>
-        </>
+        <Section title="AI Take">
+          <PanelRow>
+            <InkBox width={66}>
+              <Text color={palette.text} wrap="wrap">{pulse.aiTake}</Text>
+            </InkBox>
+          </PanelRow>
+        </Section>
       )}
 
       {/* Watchlist Snapshot */}
       {pulse.watchlistSnapshot.length > 0 && (
-        <>
-          <SectionHeader title="Your Watchlist" width={width} />
-          <InkBox paddingX={2}>
+        <Section title="Your Watchlist">
+          <PanelRow>
             {pulse.watchlistSnapshot.map((w, i) => (
               <React.Fragment key={w.symbol}>
                 {i > 0 && <Text>   </Text>}
@@ -306,30 +281,26 @@ export function MarketPulseView({ pulse }: MarketPulseProps): React.ReactElement
                 </Text>
               </React.Fragment>
             ))}
-          </InkBox>
-        </>
+          </PanelRow>
+        </Section>
       )}
 
       {/* Alerts */}
       {pulse.alerts.length > 0 && (
-        <>
-          <SectionHeader title="Your Alerts" width={width} />
-          <InkBox flexDirection="column" paddingX={2}>
-            {pulse.alerts.slice(0, 4).map((alert, i) => (
-              <AlertRow key={i} alert={alert} />
-            ))}
-            {pulse.alerts.length > 4 && (
+        <Section title="Your Alerts">
+          {pulse.alerts.slice(0, 4).map((alert, i) => (
+            <AlertRow key={i} alert={alert} />
+          ))}
+          {pulse.alerts.length > 4 && (
+            <PanelRow>
               <Text color={palette.textTertiary}>
                 + {pulse.alerts.length - 4} more (pulse config to adjust)
               </Text>
-            )}
-          </InkBox>
-        </>
+            </PanelRow>
+          )}
+        </Section>
       )}
-
-      {/* Footer */}
-      <Text color={palette.info}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-    </InkBox>
+    </Panel>
   );
 }
 

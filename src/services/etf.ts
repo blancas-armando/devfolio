@@ -134,6 +134,7 @@ export async function getETFProfile(symbol: string): Promise<ETFProfile | null> 
 
     // Get performance data
     const perfOverview = fundPerformance?.performanceOverview;
+    const trailingReturns = fundPerformance?.trailingReturns;
     const riskStats = fundPerformance?.riskOverviewStatistics?.riskStatistics?.[0];
 
     // Fetch historical prices for chart (90 days)
@@ -174,11 +175,20 @@ export async function getETFProfile(symbol: string): Promise<ETFProfile | null> 
       // Sector Weights
       sectorWeights,
 
-      // Performance
-      ytdReturn: perfOverview?.ytdReturnPct ? perfOverview.ytdReturnPct * 100 : null,
-      oneYearReturn: perfOverview?.oneYearTotalReturn ? perfOverview.oneYearTotalReturn * 100 : null,
-      threeYearReturn: perfOverview?.threeYearTotalReturn ? perfOverview.threeYearTotalReturn * 100 : null,
-      fiveYearReturn: perfOverview?.fiveYrAvgReturnPct ? perfOverview.fiveYrAvgReturnPct * 100 : null,
+      // Performance (short-term) - from trailingReturns
+      oneMonthReturn: typeof trailingReturns?.oneMonth === 'number' ? trailingReturns.oneMonth * 100 : null,
+      threeMonthReturn: typeof trailingReturns?.threeMonth === 'number' ? trailingReturns.threeMonth * 100 : null,
+      sixMonthReturn: typeof trailingReturns?.sixMonth === 'number' ? trailingReturns.sixMonth * 100 : null,
+
+      // Performance (long-term)
+      ytdReturn: typeof trailingReturns?.ytd === 'number' ? trailingReturns.ytd * 100
+        : (perfOverview?.ytdReturnPct ? perfOverview.ytdReturnPct * 100 : null),
+      oneYearReturn: typeof trailingReturns?.oneYear === 'number' ? trailingReturns.oneYear * 100
+        : (perfOverview?.oneYearTotalReturn ? perfOverview.oneYearTotalReturn * 100 : null),
+      threeYearReturn: typeof trailingReturns?.threeYear === 'number' ? trailingReturns.threeYear * 100
+        : (perfOverview?.threeYearTotalReturn ? perfOverview.threeYearTotalReturn * 100 : null),
+      fiveYearReturn: typeof trailingReturns?.fiveYear === 'number' ? trailingReturns.fiveYear * 100
+        : (perfOverview?.fiveYrAvgReturnPct ? perfOverview.fiveYrAvgReturnPct * 100 : null),
 
       // Risk
       beta: riskStats?.beta ?? detail?.beta ?? null,

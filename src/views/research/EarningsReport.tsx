@@ -8,8 +8,8 @@
 import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import type { EarningsReport } from '../../services/earnings.js';
+import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
-import { borders } from '../../design/borders.js';
 import { symbols } from '../../design/symbols.js';
 import { formatCurrency, formatPercent } from '../../utils/format.js';
 
@@ -26,21 +26,8 @@ function formatLargeNumber(num: number | null): string {
   return `$${num.toLocaleString()}`;
 }
 
-// Section header component
-function SectionHeader({ title, width }: { title: string; width: number }): React.ReactElement {
-  const line = borders.horizontal.repeat(width - title.length - 5);
-  return (
-    <InkBox>
-      <Text color={palette.info}>
-        {borders.leftTee}{borders.horizontal} {title} {line}{borders.rightTee}
-      </Text>
-    </InkBox>
-  );
-}
-
 // Quarterly result row
-function QuarterlyRow({ quarter, fiscalQuarter, revenue, eps, comment }: {
-  quarter: string;
+function QuarterlyRow({ fiscalQuarter, revenue, eps, comment }: {
   fiscalQuarter: string;
   revenue: number | null;
   eps: number | null;
@@ -49,7 +36,7 @@ function QuarterlyRow({ quarter, fiscalQuarter, revenue, eps, comment }: {
   const commentColor = comment === 'Beat' ? semantic.positive : comment === 'Miss' ? semantic.negative : semantic.warning;
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={10}>
         <Text color={palette.text}>{fiscalQuarter}</Text>
       </InkBox>
@@ -62,16 +49,15 @@ function QuarterlyRow({ quarter, fiscalQuarter, revenue, eps, comment }: {
       <InkBox width={10}>
         {comment && <Text color={commentColor}>{comment}</Text>}
       </InkBox>
-    </InkBox>
+    </PanelRow>
   );
 }
 
 // KPI row component
-function KPIRow({ name, actual, consensus, diff, comment, unit }: {
+function KPIRow({ name, actual, consensus, comment, unit }: {
   name: string;
   actual: number | string | null;
   consensus: number | string | null;
-  diff: number | null;
   comment: string | null;
   unit: string;
 }): React.ReactElement {
@@ -87,7 +73,7 @@ function KPIRow({ name, actual, consensus, diff, comment, unit }: {
   };
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={20}>
         <Text color={palette.textTertiary}>{name}</Text>
       </InkBox>
@@ -100,14 +86,13 @@ function KPIRow({ name, actual, consensus, diff, comment, unit }: {
       {comment && (
         <Text color={commentColor}>{comment}</Text>
       )}
-    </InkBox>
+    </PanelRow>
   );
 }
 
 // Guidance row component
-function GuidanceRow({ metric, current, guidance, change, unit }: {
+function GuidanceRow({ metric, guidance, change, unit }: {
   metric: string;
-  current: number | string | null;
   guidance: number | string | null;
   change: string | null;
   unit: string;
@@ -124,7 +109,7 @@ function GuidanceRow({ metric, current, guidance, change, unit }: {
   };
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={18}>
         <Text color={palette.textTertiary}>{metric}</Text>
       </InkBox>
@@ -134,25 +119,20 @@ function GuidanceRow({ metric, current, guidance, change, unit }: {
       {change && (
         <Text color={changeColor}>{change}</Text>
       )}
-    </InkBox>
+    </PanelRow>
   );
 }
 
 export function EarningsReportView({ report }: EarningsReportProps): React.ReactElement {
-  const width = 78;
-  const line = borders.horizontal.repeat(width - 2);
   const profile = report.profile;
 
   return (
-    <InkBox flexDirection="column" marginY={1}>
-      {/* Header */}
-      <Text color={palette.info}>{borders.topLeft}{line}{borders.topRight}</Text>
-      <InkBox paddingX={1}>
-        <Text bold color={palette.text}>{report.symbol}</Text>
-        <Text color={palette.textTertiary}> {borders.vertical} </Text>
+    <Panel width={78} title={report.symbol}>
+      {/* Company name and next earnings */}
+      <PanelRow>
         <Text color={palette.text}>{report.companyName}</Text>
-      </InkBox>
-      <InkBox paddingX={1}>
+      </PanelRow>
+      <PanelRow>
         <Text color={palette.textTertiary}>Earnings Report</Text>
         {report.nextEarningsDate && (
           <>
@@ -162,226 +142,209 @@ export function EarningsReportView({ report }: EarningsReportProps): React.React
             </Text>
           </>
         )}
-      </InkBox>
+      </PanelRow>
 
       {/* Current Price */}
       {profile && (
-        <>
-          <Text color={palette.info}>{borders.leftTee}{line}{borders.rightTee}</Text>
-          <InkBox paddingX={1}>
+        <Section>
+          <PanelRow>
             <Text bold color={palette.text}>{formatCurrency(profile.price)}</Text>
             <Text>  </Text>
             <Text color={profile.changePercent >= 0 ? semantic.positive : semantic.negative}>
               {profile.changePercent >= 0 ? symbols.arrowUp : symbols.arrowDown} {formatCurrency(profile.change)} ({formatPercent(profile.changePercent)})
             </Text>
-          </InkBox>
-        </>
+          </PanelRow>
+        </Section>
       )}
 
       {/* Beat/Miss Summary */}
-      <SectionHeader title="Track Record" width={width} />
-      <InkBox paddingX={1}>
-        <InkBox width={20}>
-          <Text color={palette.textTertiary}>Beat Rate</Text>
-        </InkBox>
-        <Text color={report.beatRate >= 75 ? semantic.positive : report.beatRate >= 50 ? semantic.warning : semantic.negative}>
-          {report.beatRate.toFixed(0)}%
-        </Text>
-      </InkBox>
-      <InkBox paddingX={1}>
-        <InkBox width={20}>
-          <Text color={palette.textTertiary}>Avg Surprise</Text>
-        </InkBox>
-        <Text color={report.avgSurprise >= 0 ? semantic.positive : semantic.negative}>
-          {report.avgSurprise >= 0 ? '+' : ''}{report.avgSurprise.toFixed(1)}%
-        </Text>
-      </InkBox>
-      <InkBox paddingX={1}>
-        <InkBox width={20}>
-          <Text color={palette.textTertiary}>Consecutive Beats</Text>
-        </InkBox>
-        <Text color={palette.text}>{report.consecutiveBeats}</Text>
-      </InkBox>
+      <Section title="Track Record">
+        <PanelRow>
+          <InkBox width={20}>
+            <Text color={palette.textTertiary}>Beat Rate</Text>
+          </InkBox>
+          <Text color={report.beatRate >= 75 ? semantic.positive : report.beatRate >= 50 ? semantic.warning : semantic.negative}>
+            {report.beatRate.toFixed(0)}%
+          </Text>
+        </PanelRow>
+        <PanelRow>
+          <InkBox width={20}>
+            <Text color={palette.textTertiary}>Avg Surprise</Text>
+          </InkBox>
+          <Text color={report.avgSurprise >= 0 ? semantic.positive : semantic.negative}>
+            {report.avgSurprise >= 0 ? '+' : ''}{report.avgSurprise.toFixed(1)}%
+          </Text>
+        </PanelRow>
+        <PanelRow>
+          <InkBox width={20}>
+            <Text color={palette.textTertiary}>Consecutive Beats</Text>
+          </InkBox>
+          <Text color={palette.text}>{report.consecutiveBeats}</Text>
+        </PanelRow>
+      </Section>
 
       {/* AI Summary */}
-      <SectionHeader title="AI Summary" width={width} />
-      <InkBox paddingX={1}>
-        <Text color={palette.text} wrap="wrap">{report.earningsSummary}</Text>
-      </InkBox>
+      <Section title="AI Summary">
+        <PanelRow>
+          <InkBox width={72}>
+            <Text color={palette.text} wrap="wrap">{report.earningsSummary}</Text>
+          </InkBox>
+        </PanelRow>
+      </Section>
 
       {/* Quarterly Results */}
       {report.quarterlyResults.length > 0 && (
-        <>
-          <SectionHeader title="Quarterly Results" width={width} />
-          <InkBox paddingX={1}>
+        <Section title="Quarterly Results">
+          <PanelRow>
             <InkBox width={10}><Text color={palette.textTertiary}>Quarter</Text></InkBox>
             <InkBox width={14}><Text color={palette.textTertiary}>Revenue</Text></InkBox>
             <InkBox width={10}><Text color={palette.textTertiary}>EPS</Text></InkBox>
             <InkBox width={10}><Text color={palette.textTertiary}>Result</Text></InkBox>
-          </InkBox>
-          <InkBox flexDirection="column" paddingX={1}>
-            {report.quarterlyResults.slice(0, 4).map((q) => (
-              <QuarterlyRow
-                key={q.fiscalQuarter}
-                quarter={q.quarter}
-                fiscalQuarter={q.fiscalQuarter}
-                revenue={q.revenue.actual}
-                eps={q.eps.actual}
-                comment={q.eps.comment}
-              />
-            ))}
-          </InkBox>
-        </>
+          </PanelRow>
+          {report.quarterlyResults.slice(0, 4).map((q) => (
+            <QuarterlyRow
+              key={q.fiscalQuarter}
+              fiscalQuarter={q.fiscalQuarter}
+              revenue={q.revenue.actual}
+              eps={q.eps.actual}
+              comment={q.eps.comment}
+            />
+          ))}
+        </Section>
       )}
 
       {/* KPIs */}
       {report.kpis.length > 0 && (
-        <>
-          <SectionHeader title="Key Performance Indicators" width={width} />
-          <InkBox paddingX={1}>
+        <Section title="Key Performance Indicators">
+          <PanelRow>
             <InkBox width={20}><Text color={palette.textTertiary}>Metric</Text></InkBox>
             <InkBox width={12}><Text color={palette.textTertiary}>Actual</Text></InkBox>
             <InkBox width={12}><Text color={palette.textTertiary}>Est</Text></InkBox>
             <Text color={palette.textTertiary}>Result</Text>
-          </InkBox>
-          <InkBox flexDirection="column" paddingX={1}>
-            {report.kpis.map((kpi, i) => (
-              <KPIRow
-                key={i}
-                name={kpi.name}
-                actual={kpi.actual}
-                consensus={kpi.consensus}
-                diff={kpi.diff}
-                comment={kpi.comment}
-                unit={kpi.unit}
-              />
-            ))}
-          </InkBox>
-        </>
+          </PanelRow>
+          {report.kpis.map((kpi, i) => (
+            <KPIRow
+              key={i}
+              name={kpi.name}
+              actual={kpi.actual}
+              consensus={kpi.consensus}
+              comment={kpi.comment}
+              unit={kpi.unit}
+            />
+          ))}
+        </Section>
       )}
 
       {/* Guidance */}
       {report.guidance.length > 0 && (
-        <>
-          <SectionHeader title="Forward Guidance" width={width} />
-          <InkBox flexDirection="column" paddingX={1}>
-            {report.guidance.map((g, i) => (
-              <GuidanceRow
-                key={i}
-                metric={g.metric}
-                current={g.current}
-                guidance={g.guidance}
-                change={g.change}
-                unit={g.unit}
-              />
-            ))}
-          </InkBox>
+        <Section title="Forward Guidance">
+          {report.guidance.map((g, i) => (
+            <GuidanceRow
+              key={i}
+              metric={g.metric}
+              guidance={g.guidance}
+              change={g.change}
+              unit={g.unit}
+            />
+          ))}
           {report.guidanceAnalysis && (
-            <InkBox paddingX={1} marginTop={1}>
-              <Text color={palette.textSecondary} wrap="wrap">{report.guidanceAnalysis}</Text>
-            </InkBox>
+            <PanelRow>
+              <InkBox width={72}>
+                <Text color={palette.textSecondary} wrap="wrap">{report.guidanceAnalysis}</Text>
+              </InkBox>
+            </PanelRow>
           )}
-        </>
+        </Section>
       )}
 
       {/* Forward Estimates */}
-      <SectionHeader title="Analyst Estimates" width={width} />
-      <InkBox paddingX={1}>
-        <InkBox flexDirection="column" width={38}>
-          <InkBox>
-            <InkBox width={20}><Text color={palette.textTertiary}>Current Q EPS</Text></InkBox>
-            <Text color={palette.text}>
-              {report.estimates.currentQuarterEps !== null ? `$${report.estimates.currentQuarterEps.toFixed(2)}` : 'N/A'}
-            </Text>
-          </InkBox>
-          <InkBox>
-            <InkBox width={20}><Text color={palette.textTertiary}>Current Y EPS</Text></InkBox>
-            <Text color={palette.text}>
-              {report.estimates.currentYearEps !== null ? `$${report.estimates.currentYearEps.toFixed(2)}` : 'N/A'}
-            </Text>
-          </InkBox>
-        </InkBox>
-        <InkBox flexDirection="column" width={38}>
-          <InkBox>
-            <InkBox width={20}><Text color={palette.textTertiary}>Next Q EPS</Text></InkBox>
-            <Text color={palette.text}>
-              {report.estimates.nextQuarterEps !== null ? `$${report.estimates.nextQuarterEps.toFixed(2)}` : 'N/A'}
-            </Text>
-          </InkBox>
-          <InkBox>
-            <InkBox width={20}><Text color={palette.textTertiary}>Next Y EPS</Text></InkBox>
-            <Text color={palette.text}>
-              {report.estimates.nextYearEps !== null ? `$${report.estimates.nextYearEps.toFixed(2)}` : 'N/A'}
-            </Text>
-          </InkBox>
-        </InkBox>
-      </InkBox>
+      <Section title="Analyst Estimates">
+        <PanelRow>
+          <InkBox width={20}><Text color={palette.textTertiary}>Current Q EPS</Text></InkBox>
+          <Text color={palette.text}>
+            {report.estimates.currentQuarterEps !== null ? `$${report.estimates.currentQuarterEps.toFixed(2)}` : 'N/A'}
+          </Text>
+          <Text>    </Text>
+          <InkBox width={16}><Text color={palette.textTertiary}>Next Q EPS</Text></InkBox>
+          <Text color={palette.text}>
+            {report.estimates.nextQuarterEps !== null ? `$${report.estimates.nextQuarterEps.toFixed(2)}` : 'N/A'}
+          </Text>
+        </PanelRow>
+        <PanelRow>
+          <InkBox width={20}><Text color={palette.textTertiary}>Current Y EPS</Text></InkBox>
+          <Text color={palette.text}>
+            {report.estimates.currentYearEps !== null ? `$${report.estimates.currentYearEps.toFixed(2)}` : 'N/A'}
+          </Text>
+          <Text>    </Text>
+          <InkBox width={16}><Text color={palette.textTertiary}>Next Y EPS</Text></InkBox>
+          <Text color={palette.text}>
+            {report.estimates.nextYearEps !== null ? `$${report.estimates.nextYearEps.toFixed(2)}` : 'N/A'}
+          </Text>
+        </PanelRow>
+      </Section>
 
       {/* Key Takeaways */}
       {report.keyTakeaways.length > 0 && (
-        <>
-          <SectionHeader title="Key Takeaways" width={width} />
-          <InkBox flexDirection="column" paddingX={1}>
-            {report.keyTakeaways.map((t, i) => (
-              <InkBox key={i}>
-                <Text color={palette.accent}>{symbols.bullet} </Text>
+        <Section title="Key Takeaways">
+          {report.keyTakeaways.map((t, i) => (
+            <PanelRow key={i}>
+              <Text color={palette.accent}>{symbols.bullet} </Text>
+              <InkBox width={70}>
                 <Text color={palette.text} wrap="wrap">{t}</Text>
               </InkBox>
-            ))}
-          </InkBox>
-        </>
+            </PanelRow>
+          ))}
+        </Section>
       )}
 
       {/* Performance Trend */}
       {report.performanceTrend && (
-        <>
-          <SectionHeader title="Performance Trend" width={width} />
-          <InkBox paddingX={1}>
-            <Text color={palette.text} wrap="wrap">{report.performanceTrend}</Text>
-          </InkBox>
-        </>
+        <Section title="Performance Trend">
+          <PanelRow>
+            <InkBox width={72}>
+              <Text color={palette.text} wrap="wrap">{report.performanceTrend}</Text>
+            </InkBox>
+          </PanelRow>
+        </Section>
       )}
 
       {/* SEC Filings */}
       {report.recentFilings.length > 0 && (
-        <>
-          <SectionHeader title="Recent SEC Filings" width={width} />
-          <InkBox flexDirection="column" paddingX={1}>
-            {report.recentFilings.slice(0, 5).map((f, i) => (
-              <InkBox key={i}>
-                <InkBox width={8}>
-                  <Text color={palette.accent}>{f.form}</Text>
-                </InkBox>
-                <InkBox width={12}>
-                  <Text color={palette.textTertiary}>{f.filingDate}</Text>
-                </InkBox>
-                <Text color={palette.text}>
-                  {f.description.length > 45 ? f.description.substring(0, 42) + '...' : f.description}
-                </Text>
+        <Section title="Recent SEC Filings">
+          {report.recentFilings.slice(0, 5).map((f, i) => (
+            <PanelRow key={i}>
+              <InkBox width={8}>
+                <Text color={palette.accent}>{f.form}</Text>
               </InkBox>
-            ))}
-          </InkBox>
-        </>
+              <InkBox width={12}>
+                <Text color={palette.textTertiary}>{f.filingDate}</Text>
+              </InkBox>
+              <Text color={palette.text}>
+                {f.description.length > 45 ? f.description.substring(0, 42) + '...' : f.description}
+              </Text>
+            </PanelRow>
+          ))}
+        </Section>
       )}
 
       {/* Outlook */}
       {report.outlook && (
-        <>
-          <SectionHeader title="Outlook" width={width} />
-          <InkBox paddingX={1}>
-            <Text color={palette.text} wrap="wrap">{report.outlook}</Text>
-          </InkBox>
-        </>
+        <Section title="Outlook">
+          <PanelRow>
+            <InkBox width={72}>
+              <Text color={palette.text} wrap="wrap">{report.outlook}</Text>
+            </InkBox>
+          </PanelRow>
+        </Section>
       )}
 
       {/* Footer */}
-      <InkBox paddingX={1} marginTop={1}>
+      <PanelRow>
         <Text color={palette.textTertiary}>
           Generated {report.generatedAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
         </Text>
-      </InkBox>
-      <Text color={palette.info}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-    </InkBox>
+      </PanelRow>
+    </Panel>
   );
 }
 

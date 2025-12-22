@@ -31,6 +31,9 @@ import { PortfolioView } from '../views/portfolio/PortfolioView.js';
 import { ScreenerResultsView } from '../views/screener/ScreenerResults.js';
 import { ResearchReportView } from '../views/research/ResearchReport.js';
 import { EarningsReportView } from '../views/research/EarningsReport.js';
+import { WhyExplanationView } from '../views/research/WhyExplanation.js';
+import { FinancialsView } from '../views/research/FinancialsView.js';
+import { HistoryView } from '../views/research/HistoryView.js';
 import { ETFProfileView } from '../views/etf/ETFProfile.js';
 import { ETFComparisonView } from '../views/etf/ETFComparison.js';
 
@@ -44,6 +47,11 @@ import { generateResearchReport } from '../services/research.js';
 import { generateEarningsReport } from '../services/earnings.js';
 import { getETFProfile, compareETFs } from '../services/etf.js';
 import { getRecentFilings, getFilingText, getCompanyInfo } from '../services/sec.js';
+import { explainMovement } from '../services/why.js';
+import { getAsciiLogo } from '../services/logo.js';
+import { getFinancialStatements } from '../services/financials.js';
+import { getHistoricalAnalysis } from '../services/history.js';
+import { chat } from '../ai/agent.js';
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from '../db/watchlist.js';
 import { getPortfolio } from '../db/portfolio.js';
 import { getPulseConfig, updatePulseConfig } from '../db/config.js';
@@ -57,6 +65,9 @@ import {
   parseCompareCommand,
   parseStockCompareCommand,
   parseScreenCommand,
+  parseWhyCommand,
+  parseFinancialsCommand,
+  parseHistoryCommand,
 } from '../cli/commands.js';
 
 // Shared state for article reading
@@ -131,7 +142,7 @@ function AppInner(): React.ReactElement {
         </InkBox>
       )}
       <InkBox marginTop={1} />
-      <CommandInput onSubmit={handleSubmit} disabled={state.processing.isProcessing} modelName="llama-3.3-70b" showBorder={true} showHints={true} width="standard" />
+      <CommandInput onSubmit={handleSubmit} disabled={state.processing.isProcessing} modelName="llama-3.3-70b" showBorder={true} showHints={true} width="terminal" />
       <StatusBar modelName="llama-3.3-70b" isProcessing={state.processing.isProcessing} />
     </InkBox>
   );
@@ -215,15 +226,19 @@ async function routeCommand(command: string, dispatch: React.Dispatch<any>): Pro
   if (stockCmd) {
     try {
       const [profile, relatedStocks] = await Promise.all([
-        getCompanyProfile(stockCmd.symbol),
+        getCompanyProfile(stockCmd.symbol, stockCmd.timeframe),
         getRelatedStocks(stockCmd.symbol),
       ]);
       if (!profile) {
         dispatch({ type: 'APPEND_OUTPUT', block: createErrorBlock(`Symbol not found: ${stockCmd.symbol}`, ['Check the symbol is valid']) });
         return;
       }
-      const quickTake = await getQuickTake(profile);
-      dispatch({ type: 'APPEND_OUTPUT', block: createComponentBlock(<StockProfile profile={profile} quickTake={quickTake} relatedStocks={relatedStocks} />) });
+      // Fetch quick take and logo in parallel (logo uses website from profile)
+      const [quickTake, logo] = await Promise.all([
+        getQuickTake(profile),
+        getAsciiLogo(stockCmd.symbol, profile.website),
+      ]);
+      dispatch({ type: 'APPEND_OUTPUT', block: createComponentBlock(<StockProfile profile={profile} quickTake={quickTake} relatedStocks={relatedStocks} timeframe={stockCmd.timeframe} logo={logo} />) });
     } catch {
       dispatch({ type: 'APPEND_OUTPUT', block: createErrorBlock(`Failed to load ${stockCmd.symbol}`, ['Check network connection']) });
     }
@@ -334,8 +349,9 @@ async function routeCommand(command: string, dispatch: React.Dispatch<any>): Pro
     return;
   }
 
-  // Screener
-  const screenCmd = parseScreenCommand(originalCommand);
+  // Screener - normalize 'sc' to 'screen' for parsing
+  const normalizedScreenCmd = originalCommand.replace(/^sc(\s|$)/i, 'screen$1');
+  const screenCmd = parseScreenCommand(normalizedScreenCmd);
   if (screenCmd !== null) {
     if (screenCmd === 'help') {
       const presets = getAvailablePresets();
@@ -463,8 +479,61 @@ async function routeCommand(command: string, dispatch: React.Dispatch<any>): Pro
     return;
   }
 
-  // Unknown command
-  dispatch({ type: 'APPEND_OUTPUT', block: createTextBlock(`Unknown command: ${command}. Type 'help' for available commands.`, 'warning') });
+  // Why command - explain stock movement
+  const whySymbol = parseWhyCommand(originalCommand);
+  if (whySymbol) {
+    try {
+      const explanation = await explainMovement(whySymbol);
+      if (!explanation) {
+        dispatch({ type: 'APPEND_OUTPUT', block: createErrorBlock(`Could not analyze movement for ${whySymbol}`, ['Check the symbol']) });
+        return;
+      }
+      dispatch({ type: 'APPEND_OUTPUT', block: createComponentBlock(<WhyExplanationView explanation={explanation} />) });
+    } catch {
+      dispatch({ type: 'APPEND_OUTPUT', block: createErrorBlock(`Failed to analyze ${whySymbol}`, ['Check network connection']) });
+    }
+    return;
+  }
+
+  // Financials command - financial statements
+  const financialsResult = parseFinancialsCommand(originalCommand);
+  if (financialsResult) {
+    try {
+      const statements = await getFinancialStatements(financialsResult.symbol, financialsResult.period);
+      if (!statements) {
+        dispatch({ type: 'APPEND_OUTPUT', block: createErrorBlock(`Could not fetch financials for ${financialsResult.symbol}`, ['Check the symbol']) });
+        return;
+      }
+      dispatch({ type: 'APPEND_OUTPUT', block: createComponentBlock(<FinancialsView statements={statements} statementType={financialsResult.type} />) });
+    } catch {
+      dispatch({ type: 'APPEND_OUTPUT', block: createErrorBlock(`Failed to load financials for ${financialsResult.symbol}`, ['Check network connection']) });
+    }
+    return;
+  }
+
+  // History command - comprehensive historical analysis
+  const historyResult = parseHistoryCommand(originalCommand);
+  if (historyResult) {
+    try {
+      const analysis = await getHistoricalAnalysis(historyResult.symbol, historyResult.period);
+      if (!analysis) {
+        dispatch({ type: 'APPEND_OUTPUT', block: createErrorBlock(`Could not fetch history for ${historyResult.symbol}`, ['Check the symbol']) });
+        return;
+      }
+      dispatch({ type: 'APPEND_OUTPUT', block: createComponentBlock(<HistoryView analysis={analysis} />) });
+    } catch {
+      dispatch({ type: 'APPEND_OUTPUT', block: createErrorBlock(`Failed to load history for ${historyResult.symbol}`, ['Check network connection']) });
+    }
+    return;
+  }
+
+  // General query - send to AI agent
+  try {
+    const response = await chat(command);
+    dispatch({ type: 'APPEND_OUTPUT', block: createTextBlock(response.message, 'normal') });
+  } catch {
+    dispatch({ type: 'APPEND_OUTPUT', block: createTextBlock(`Unknown command: ${command}. Type 'help' for available commands.`, 'warning') });
+  }
 }
 
 export function App(): React.ReactElement {

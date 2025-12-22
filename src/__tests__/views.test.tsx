@@ -151,9 +151,23 @@ const mockStockProfile: CompanyProfile = {
   recommendationKey: 'buy',
   numberOfAnalysts: 35,
   asOfDate: new Date(),
+  oneMonthReturn: 3.2,
   threeMonthReturn: 8.5,
+  sixMonthReturn: 12.4,
   ytdReturn: 15.2,
+  oneYearReturn: 25.8,
+  threeYearReturn: 45.2,
+  fiveYearReturn: 120.5,
+  tenYearReturn: 350.2,
   historicalPrices: [175, 178, 180, 179, 182, 180.5],
+  historicalData: [
+    { date: new Date('2024-01-01'), close: 175 },
+    { date: new Date('2024-01-02'), close: 178 },
+    { date: new Date('2024-01-03'), close: 180 },
+    { date: new Date('2024-01-04'), close: 179 },
+    { date: new Date('2024-01-05'), close: 182 },
+    { date: new Date('2024-01-06'), close: 180.5 },
+  ],
 };
 
 describe('View Components', () => {

@@ -139,7 +139,12 @@ export interface ETFProfile {
   // Sector Weights
   sectorWeights: Record<string, number>;
 
-  // Performance
+  // Performance (short-term)
+  oneMonthReturn: number | null;
+  threeMonthReturn: number | null;
+  sixMonthReturn: number | null;
+
+  // Performance (long-term)
   ytdReturn: number | null;
   oneYearReturn: number | null;
   threeYearReturn: number | null;

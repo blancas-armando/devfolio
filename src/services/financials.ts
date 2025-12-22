@@ -10,7 +10,18 @@ import { CACHE_TTL } from '../constants/index.js';
 const yahooFinance = new YahooFinance({
   suppressNotices: ['yahooSurvey'],
   versionCheck: false,
+  validation: {
+    logErrors: false,
+    logOptionsErrors: false,
+  },
 });
+
+// Query options to handle Yahoo's sometimes inconsistent data
+const QUERY_OPTIONS = {
+  validateResult: false as const,
+};
+
+export type FinancialsPeriod = 'annual' | 'quarterly';
 
 // Simple in-memory cache
 const cache = new Map<string, { data: unknown; expires: number }>();
@@ -102,6 +113,7 @@ export interface FinancialStatements {
   name: string;
   currency: string;
   fiscalYearEnd: string;
+  period: FinancialsPeriod;
   incomeStatements: IncomeStatementRow[];
   balanceSheets: BalanceSheetRow[];
   cashFlows: CashFlowRow[];
@@ -118,24 +130,44 @@ function getNum(obj: Record<string, unknown>, key: string): number | null {
   return typeof val === 'number' ? val : null;
 }
 
-export async function getFinancialStatements(symbol: string): Promise<FinancialStatements | null> {
-  const cacheKey = `financials:${symbol}`;
+export async function getFinancialStatements(
+  symbol: string,
+  period: FinancialsPeriod = 'annual'
+): Promise<FinancialStatements | null> {
+  const cacheKey = `financials:${symbol}:${period}`;
   const cached = getCached<FinancialStatements>(cacheKey);
   if (cached) return cached;
 
   try {
-    // Get basic info from quoteSummary (price and profile still work)
-    const [summaryResult, timeSeriesResult] = await Promise.all([
-      yahooFinance.quoteSummary(symbol.toUpperCase(), {
-        modules: ['price', 'assetProfile'],
-      }),
-      // Use fundamentalsTimeSeries for financial statements (quoteSummary deprecated since Nov 2024)
-      yahooFinance.fundamentalsTimeSeries(symbol.toUpperCase(), {
-        period1: new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000), // 5 years ago
-        type: 'annual',
+    // Fetch time series data - may fail validation for quarterly
+    let timeSeriesResult: Awaited<ReturnType<typeof yahooFinance.fundamentalsTimeSeries>> = [];
+    let actualPeriod = period;
+    try {
+      timeSeriesResult = await yahooFinance.fundamentalsTimeSeries(symbol.toUpperCase(), {
+        period1: new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000),
+        type: period,
         module: 'all',
-      }),
-    ]);
+      }, QUERY_OPTIONS);
+    } catch {
+      // Quarterly data may fail - fall back to annual
+      if (period === 'quarterly') {
+        actualPeriod = 'annual';
+        try {
+          timeSeriesResult = await yahooFinance.fundamentalsTimeSeries(symbol.toUpperCase(), {
+            period1: new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000),
+            type: 'annual',
+            module: 'all',
+          }, QUERY_OPTIONS);
+        } catch {
+          // Continue with empty
+        }
+      }
+    }
+
+    // Get basic info from quoteSummary
+    const summaryResult = await yahooFinance.quoteSummary(symbol.toUpperCase(), {
+      modules: ['price', 'assetProfile'],
+    });
 
     const price = summaryResult.price;
     const profile = summaryResult.assetProfile;
@@ -145,8 +177,10 @@ export async function getFinancialStatements(symbol: string): Promise<FinancialS
     // Group time series results by date
     const dataByDate = new Map<string, Record<string, unknown>>();
     for (const item of timeSeriesResult) {
-      const dateKey = item.date.toISOString().split('T')[0];
-      const existing = dataByDate.get(dateKey) || { date: item.date };
+      // item.date can be a Date object or Unix timestamp (number)
+      const dateObj = item.date instanceof Date ? item.date : new Date((item.date as number) * 1000);
+      const dateKey = dateObj.toISOString().split('T')[0];
+      const existing = dataByDate.get(dateKey) || { date: dateObj } as Record<string, unknown>;
       // Merge all fields from this item into the date entry
       const itemData = item as unknown as Record<string, unknown>;
       for (const [key, value] of Object.entries(itemData)) {
@@ -265,6 +299,7 @@ export async function getFinancialStatements(symbol: string): Promise<FinancialS
       name: price.shortName ?? price.longName ?? symbol,
       currency: price.currency ?? 'USD',
       fiscalYearEnd,
+      period: actualPeriod,
       incomeStatements,
       balanceSheets,
       cashFlows,

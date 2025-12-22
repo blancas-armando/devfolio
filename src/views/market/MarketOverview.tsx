@@ -7,8 +7,8 @@
 import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import type { MarketOverview } from '../../services/market.js';
+import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
-import { borders } from '../../design/borders.js';
 import { symbols } from '../../design/symbols.js';
 
 export interface MarketOverviewProps {
@@ -27,19 +27,19 @@ function IndexRow({ name, price, changePercent }: {
   const changeStr = `${isUp ? '+' : ''}${changePercent.toFixed(2)}%`;
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={16}>
         <Text color={palette.text}>{name}</Text>
       </InkBox>
-      <InkBox width={14} justifyContent="flex-end">
+      <InkBox width={14}>
         <Text color={palette.text}>{priceStr}</Text>
       </InkBox>
-      <InkBox width={12} marginLeft={2}>
+      <InkBox width={12}>
         <Text color={isUp ? semantic.positive : semantic.negative}>
           {arrow} {changeStr}
         </Text>
       </InkBox>
-    </InkBox>
+    </PanelRow>
   );
 }
 
@@ -49,17 +49,17 @@ function VixRow({ vix }: { vix: number }): React.ReactElement {
   const vixLabel = vix > 25 ? '(High Fear)' : vix > 20 ? '(Elevated)' : vix > 15 ? '(Normal)' : '(Low)';
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={16}>
         <Text color={palette.text}>VIX</Text>
       </InkBox>
-      <InkBox width={14} justifyContent="flex-end">
+      <InkBox width={14}>
         <Text color={palette.text}>{vix.toFixed(2)}</Text>
       </InkBox>
-      <InkBox width={12} marginLeft={2}>
+      <InkBox width={12}>
         <Text color={vixColor}>{vixLabel}</Text>
       </InkBox>
-    </InkBox>
+    </PanelRow>
   );
 }
 
@@ -79,7 +79,7 @@ function SectorRow({
   const changeStr = `${isUp ? '+' : ''}${changePercent.toFixed(2)}%`;
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={18}>
         <Text color={palette.text}>{name}</Text>
       </InkBox>
@@ -91,12 +91,12 @@ function SectorRow({
           {symbols.blockLight.repeat(barWidth - barLen)}
         </Text>
       </InkBox>
-      <InkBox width={10} justifyContent="flex-end">
+      <InkBox width={10}>
         <Text color={isUp ? semantic.positive : semantic.negative}>
           {changeStr}
         </Text>
       </InkBox>
-    </InkBox>
+    </PanelRow>
   );
 }
 
@@ -112,7 +112,7 @@ function MoverList({
   const arrow = isGainer ? symbols.arrowUp : symbols.arrowDown;
 
   return (
-    <InkBox>
+    <PanelRow>
       <Text color={palette.textTertiary}>{arrow} </Text>
       {movers.slice(0, 4).map((m, i) => (
         <React.Fragment key={m.symbol}>
@@ -122,31 +122,17 @@ function MoverList({
           </Text>
         </React.Fragment>
       ))}
-    </InkBox>
+    </PanelRow>
   );
 }
 
 export function MarketOverviewView({ overview }: MarketOverviewProps): React.ReactElement {
-  const width = 72;
-  const line = borders.horizontal.repeat(width - 2);
   const maxPct = Math.max(...overview.sectors.map(s => Math.abs(s.changePercent)), 1);
 
   return (
-    <InkBox flexDirection="column" marginY={1}>
-      {/* Header */}
-      <Text color={palette.info}>{borders.topLeft}{line}{borders.topRight}</Text>
-      <InkBox>
-        <Text color={palette.info}>{borders.vertical} </Text>
-        <Text bold color={palette.text}>Market Overview</Text>
-      </InkBox>
-
+    <Panel width={72} title="Market Overview">
       {/* Indices Section */}
-      <InkBox>
-        <Text color={palette.info}>{borders.leftTee}{borders.horizontal}</Text>
-        <Text color={palette.info}> Indices </Text>
-        <Text color={palette.info}>{borders.horizontal.repeat(width - 14)}{borders.rightTee}</Text>
-      </InkBox>
-      <InkBox flexDirection="column" paddingX={2}>
+      <Section title="Indices">
         {overview.indices.map((idx) => (
           <IndexRow
             key={idx.symbol}
@@ -156,15 +142,10 @@ export function MarketOverviewView({ overview }: MarketOverviewProps): React.Rea
           />
         ))}
         {overview.vix !== null && <VixRow vix={overview.vix} />}
-      </InkBox>
+      </Section>
 
       {/* Sector Performance Section */}
-      <InkBox>
-        <Text color={palette.info}>{borders.leftTee}{borders.horizontal}</Text>
-        <Text color={palette.info}> Sector Performance </Text>
-        <Text color={palette.info}>{borders.horizontal.repeat(width - 24)}{borders.rightTee}</Text>
-      </InkBox>
-      <InkBox flexDirection="column" paddingX={2}>
+      <Section title="Sector Performance">
         {overview.sectors.slice(0, 6).map((sector) => (
           <SectorRow
             key={sector.name}
@@ -173,23 +154,16 @@ export function MarketOverviewView({ overview }: MarketOverviewProps): React.Rea
             maxPct={maxPct}
           />
         ))}
-      </InkBox>
+      </Section>
 
       {/* Top Movers Section */}
-      <InkBox>
-        <Text color={palette.info}>{borders.leftTee}{borders.horizontal}</Text>
-        <Text color={palette.info}> Top Movers </Text>
-        <Text color={palette.info}>{borders.horizontal.repeat(width - 16)}{borders.rightTee}</Text>
-      </InkBox>
-      <InkBox flexDirection="column" paddingX={2}>
+      <Section title="Top Movers">
         <MoverList movers={overview.gainers} isGainer={true} />
         <MoverList movers={overview.losers} isGainer={false} />
-      </InkBox>
+      </Section>
 
       {/* Footer */}
-      <Text color={palette.info}>{borders.leftTee}{line}{borders.rightTee}</Text>
-      <InkBox>
-        <Text color={palette.info}>{borders.vertical} </Text>
+      <PanelRow>
         <Text color={palette.textTertiary}>
           As of {overview.asOfDate.toLocaleString('en-US', {
             month: 'short',
@@ -199,9 +173,8 @@ export function MarketOverviewView({ overview }: MarketOverviewProps): React.Rea
             minute: '2-digit'
           })}
         </Text>
-      </InkBox>
-      <Text color={palette.info}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-    </InkBox>
+      </PanelRow>
+    </Panel>
   );
 }
 

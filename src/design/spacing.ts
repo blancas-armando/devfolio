@@ -31,6 +31,11 @@ export const width = {
   max: 100,
 } as const;
 
+// Get actual terminal width (dynamic)
+export function getTerminalWidth(): number {
+  return process.stdout.columns || 80;
+}
+
 // Inner width (accounting for box borders and padding)
 export const innerWidth = {
   compact: width.compact - 4,     // 56

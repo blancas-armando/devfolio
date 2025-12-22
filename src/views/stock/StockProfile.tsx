@@ -10,19 +10,37 @@ import { Box as InkBox, Text } from 'ink';
 import type { CompanyProfile } from '../../services/market.js';
 import type { QuickTake } from '../../services/quicktake.js';
 import type { RelatedStock } from '../../services/screener.js';
+import type { AsciiLogo as AsciiLogoType } from '../../services/logo.js';
+import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
-import { borders } from '../../design/borders.js';
 import { symbols } from '../../design/symbols.js';
-import { MetricSection, MetricGrid, type MetricItem } from '../../components/data/MetricGrid.js';
+import { MetricGrid, type MetricItem } from '../../components/data/MetricGrid.js';
 import { PriceWithChange } from '../../components/data/PriceChange.js';
-import { PriceChart } from '../../components/data/Chart.js';
+import { ASCIIChart } from '../../components/data/ASCIIChart.js';
+import { AsciiLogo } from '../../components/data/AsciiLogo.js';
 import { formatLargeNumber, formatRatio, formatPercentValue } from '../../utils/format.js';
 
 export interface StockProfileProps {
   profile: CompanyProfile;
   quickTake?: QuickTake | null;
   relatedStocks?: RelatedStock[];
+  timeframe?: string;
+  logo?: AsciiLogoType | null;
 }
+
+// Map timeframe to readable label
+const TIMEFRAME_LABELS: Record<string, string> = {
+  '1d': '1 day',
+  '5d': '5 days',
+  '1m': '1 month',
+  '3m': '3 months',
+  '6m': '6 months',
+  '1y': '1 year',
+  '5y': '5 years',
+  '10y': '10 years',
+  'max': 'all time',
+  'all': 'all time',
+};
 
 // Helper to format currency
 function formatCurrency(value: number | null | undefined): string {
@@ -30,33 +48,15 @@ function formatCurrency(value: number | null | undefined): string {
   return '$' + value.toFixed(2);
 }
 
-// Section header component
-function SectionHeader({ title }: { title: string }): React.ReactElement {
-  return (
-    <InkBox marginTop={1}>
-      <Text bold color={semantic.command}>{title}</Text>
-    </InkBox>
-  );
+// Helper to format return percentage
+function formatReturn(value: number | null): string {
+  if (value === null) return 'N/A';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 }
 
-// Metric row component
-function MetricRow({ items }: { items: MetricItem[] }): React.ReactElement {
-  return (
-    <InkBox flexWrap="wrap">
-      {items.map((item, i) => (
-        <InkBox key={item.label} width="33%" paddingRight={1}>
-          <Text color={palette.textTertiary}>{item.label}: </Text>
-          <Text color={palette.text}>{item.value}</Text>
-        </InkBox>
-      ))}
-    </InkBox>
-  );
-}
-
-export function StockProfile({ profile, quickTake, relatedStocks }: StockProfileProps): React.ReactElement {
-  const width = 60;
-  const line = borders.horizontal.repeat(width - 2);
-  const isUp = profile.changePercent >= 0;
+export function StockProfile({ profile, quickTake, relatedStocks, timeframe, logo }: StockProfileProps): React.ReactElement {
+  const width = 72;
+  const chartLabel = `Price Chart (${TIMEFRAME_LABELS[timeframe ?? '3m'] ?? '90 days'})`;
 
   // Prepare metrics
   const marketDataMetrics: MetricItem[] = [
@@ -100,101 +100,145 @@ export function StockProfile({ profile, quickTake, relatedStocks }: StockProfile
     { label: 'Book Value', value: profile.bookValue ? formatCurrency(profile.bookValue) : 'N/A' },
   ];
 
+  const returnItems = [
+    { label: '1M', value: profile.oneMonthReturn },
+    { label: '3M', value: profile.threeMonthReturn },
+    { label: '6M', value: profile.sixMonthReturn },
+    { label: 'YTD', value: profile.ytdReturn },
+    { label: '1Y', value: profile.oneYearReturn },
+    { label: '3Y', value: profile.threeYearReturn },
+    { label: '5Y', value: profile.fiveYearReturn },
+    { label: '10Y', value: profile.tenYearReturn },
+  ];
+
   return (
-    <InkBox flexDirection="column" marginY={1}>
-      {/* Header */}
-      <Text color={palette.border}>{borders.topLeft}{line}{borders.topRight}</Text>
+    <Panel width={width} title={profile.symbol}>
+      {/* Header with logo */}
+      {logo ? (
+        <PanelRow>
+          <InkBox flexDirection="row">
+            <InkBox marginRight={2}>
+              <AsciiLogo logo={logo} />
+            </InkBox>
+            <InkBox flexDirection="column">
+              <Text color={palette.text}>{profile.name}</Text>
+              <PriceWithChange
+                price={profile.price}
+                change={profile.change}
+                changePercent={profile.changePercent}
+                showArrow={true}
+              />
+              <Text color={palette.textTertiary}>{profile.sector} &gt; {profile.industry}</Text>
+            </InkBox>
+          </InkBox>
+        </PanelRow>
+      ) : (
+        <>
+          {/* Company name */}
+          <PanelRow>
+            <Text color={palette.text}>{profile.name}</Text>
+          </PanelRow>
 
-      {/* Company name and ticker */}
-      <InkBox>
-        <Text color={palette.border}>{borders.vertical} </Text>
-        <Text bold color={palette.text}>{profile.symbol}</Text>
-        <Text color={palette.textTertiary}> {borders.vertical} </Text>
-        <Text color={palette.text}>{profile.name}</Text>
-      </InkBox>
+          {/* Price line */}
+          <PanelRow>
+            <PriceWithChange
+              price={profile.price}
+              change={profile.change}
+              changePercent={profile.changePercent}
+              showArrow={true}
+            />
+          </PanelRow>
 
-      {/* Price line */}
-      <InkBox>
-        <Text color={palette.border}>{borders.vertical} </Text>
-        <PriceWithChange
-          price={profile.price}
-          change={profile.change}
-          changePercent={profile.changePercent}
-          showArrow={true}
-        />
-      </InkBox>
-
-      {/* Sector & Industry */}
-      <InkBox>
-        <Text color={palette.border}>{borders.vertical} </Text>
-        <Text color={palette.textTertiary}>{profile.sector} &gt; {profile.industry}</Text>
-      </InkBox>
+          {/* Sector & Industry */}
+          <PanelRow>
+            <Text color={palette.textTertiary}>{profile.sector} &gt; {profile.industry}</Text>
+          </PanelRow>
+        </>
+      )}
 
       {/* Description */}
       {profile.description && (
-        <>
-          <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-          <InkBox>
-            <Text color={palette.border}>{borders.vertical} </Text>
+        <Section>
+          <PanelRow>
             <InkBox width={width - 4}>
               <Text color={palette.textSecondary} wrap="truncate-end">
                 {profile.description.substring(0, 200)}
                 {profile.description.length > 200 ? '...' : ''}
               </Text>
             </InkBox>
-          </InkBox>
-        </>
+          </PanelRow>
+        </Section>
       )}
 
       {/* Market Data Section */}
-      <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-      <InkBox>
-        <Text color={palette.border}>{borders.vertical} </Text>
-        <Text bold color={semantic.command}>Market Data</Text>
-      </InkBox>
-      <InkBox flexDirection="column" paddingX={1}>
-        <MetricGrid metrics={marketDataMetrics} columns={3} />
-      </InkBox>
+      <Section title="Market Data">
+        <PanelRow>
+          <MetricGrid metrics={marketDataMetrics} columns={3} />
+        </PanelRow>
+      </Section>
 
       {/* Valuation Section */}
-      <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-      <InkBox>
-        <Text color={palette.border}>{borders.vertical} </Text>
-        <Text bold color={semantic.command}>Valuation</Text>
-      </InkBox>
-      <InkBox flexDirection="column" paddingX={1}>
-        <MetricGrid metrics={valuationMetrics} columns={3} />
-      </InkBox>
+      <Section title="Valuation">
+        <PanelRow>
+          <MetricGrid metrics={valuationMetrics} columns={3} />
+        </PanelRow>
+      </Section>
 
       {/* Financials Section */}
-      <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-      <InkBox>
-        <Text color={palette.border}>{borders.vertical} </Text>
-        <Text bold color={semantic.command}>Financials</Text>
-      </InkBox>
-      <InkBox flexDirection="column" paddingX={1}>
-        <MetricGrid metrics={financialMetrics} columns={3} />
-      </InkBox>
+      <Section title="Financials">
+        <PanelRow>
+          <MetricGrid metrics={financialMetrics} columns={3} />
+        </PanelRow>
+      </Section>
 
       {/* Balance Sheet Section */}
-      <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-      <InkBox>
-        <Text color={palette.border}>{borders.vertical} </Text>
-        <Text bold color={semantic.command}>Balance Sheet</Text>
-      </InkBox>
-      <InkBox flexDirection="column" paddingX={1}>
-        <MetricGrid metrics={balanceSheetMetrics} columns={3} />
-      </InkBox>
+      <Section title="Balance Sheet">
+        <PanelRow>
+          <MetricGrid metrics={balanceSheetMetrics} columns={3} />
+        </PanelRow>
+      </Section>
+
+      {/* Performance Section */}
+      <Section title="Performance">
+        <PanelRow>
+          {returnItems.slice(0, 4).map(item => (
+            <InkBox key={item.label} width={12}>
+              <Text color={palette.textTertiary}>{item.label}</Text>
+            </InkBox>
+          ))}
+        </PanelRow>
+        <PanelRow>
+          {returnItems.slice(0, 4).map(item => (
+            <InkBox key={item.label} width={12}>
+              <Text color={item.value !== null && item.value >= 0 ? semantic.positive : semantic.negative}>
+                {formatReturn(item.value)}
+              </Text>
+            </InkBox>
+          ))}
+        </PanelRow>
+        <PanelRow><Text> </Text></PanelRow>
+        <PanelRow>
+          {returnItems.slice(4).map(item => (
+            <InkBox key={item.label} width={12}>
+              <Text color={palette.textTertiary}>{item.label}</Text>
+            </InkBox>
+          ))}
+        </PanelRow>
+        <PanelRow>
+          {returnItems.slice(4).map(item => (
+            <InkBox key={item.label} width={12}>
+              <Text color={item.value !== null && item.value >= 0 ? semantic.positive : semantic.negative}>
+                {formatReturn(item.value)}
+              </Text>
+            </InkBox>
+          ))}
+        </PanelRow>
+      </Section>
 
       {/* Dividends Section (if applicable) */}
       {profile.dividendYield && profile.dividendYield > 0 && (
-        <>
-          <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-          <InkBox>
-            <Text color={palette.border}>{borders.vertical} </Text>
-            <Text bold color={semantic.command}>Dividends</Text>
-          </InkBox>
-          <InkBox flexDirection="column" paddingX={1}>
+        <Section title="Dividends">
+          <PanelRow>
             <MetricGrid
               metrics={[
                 { label: 'Dividend Yield', value: formatPercentValue(profile.dividendYield) },
@@ -204,69 +248,52 @@ export function StockProfile({ profile, quickTake, relatedStocks }: StockProfile
               ]}
               columns={2}
             />
-          </InkBox>
-        </>
+          </PanelRow>
+        </Section>
       )}
 
       {/* AI Quick Take Section */}
       {quickTake && (
-        <>
-          <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-          <InkBox>
-            <Text color={palette.border}>{borders.vertical} </Text>
+        <Section title="AI Quick Take">
+          <PanelRow>
             <Text color={quickTake.sentiment === 'bullish' ? semantic.positive : quickTake.sentiment === 'bearish' ? semantic.negative : semantic.warning}>
               {quickTake.sentiment === 'bullish' ? symbols.arrowUp : quickTake.sentiment === 'bearish' ? symbols.arrowDown : '-'}
             </Text>
             <Text> </Text>
-            <Text bold color={palette.accent}>AI Quick Take</Text>
-          </InkBox>
-          <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-          <InkBox paddingX={2}>
             <Text color={quickTake.sentiment === 'bullish' ? semantic.positive : quickTake.sentiment === 'bearish' ? semantic.negative : palette.text}>
               {quickTake.summary}
             </Text>
-          </InkBox>
-          <InkBox paddingX={2}>
+          </PanelRow>
+          <PanelRow>
             <Text color={palette.textTertiary}>Key: {quickTake.keyPoint}</Text>
-          </InkBox>
-        </>
+          </PanelRow>
+        </Section>
       )}
 
       {/* Price Chart Section */}
-      {profile.historicalPrices && profile.historicalPrices.length > 10 && (
-        <>
-          <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-          <InkBox>
-            <Text color={palette.border}>{borders.vertical} </Text>
-            <Text bold color={semantic.command}>Price Chart (90 days)</Text>
-          </InkBox>
-          <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-          <InkBox paddingX={1}>
-            <PriceChart
-              data={profile.historicalPrices}
-              width={width - 12}
+      {profile.historicalData && profile.historicalData.length > 10 && (
+        <Section title={chartLabel}>
+          <PanelRow padding={0}>
+            <ASCIIChart
+              data={profile.historicalData.map(d => ({ date: d.date, value: d.close }))}
+              width={width - 4}
               height={8}
+              showDateAxis={true}
             />
-          </InkBox>
-        </>
+          </PanelRow>
+        </Section>
       )}
 
       {/* Related Stocks Section */}
       {relatedStocks && relatedStocks.length > 0 && (
-        <>
-          <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-          <InkBox>
-            <Text color={palette.border}>{borders.vertical} </Text>
-            <Text bold color={palette.info}>Related Stocks</Text>
-          </InkBox>
-          <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
+        <Section title="Related Stocks">
           {relatedStocks.slice(0, 4).map((stock) => (
-            <InkBox key={stock.symbol} paddingX={2}>
+            <PanelRow key={stock.symbol}>
               <InkBox width={8}>
                 <Text color={palette.text}>{stock.symbol}</Text>
               </InkBox>
-              <InkBox width={20}>
-                <Text color={palette.textTertiary}>{stock.name.substring(0, 18)}</Text>
+              <InkBox width={22}>
+                <Text color={palette.textTertiary}>{stock.name.substring(0, 20)}</Text>
               </InkBox>
               <InkBox width={10}>
                 <Text color={palette.text}>${stock.price.toFixed(2)}</Text>
@@ -275,15 +302,13 @@ export function StockProfile({ profile, quickTake, relatedStocks }: StockProfile
                 {stock.changePercent >= 0 ? symbols.arrowUp : symbols.arrowDown}
                 {Math.abs(stock.changePercent).toFixed(1)}%
               </Text>
-            </InkBox>
+            </PanelRow>
           ))}
-        </>
+        </Section>
       )}
 
       {/* Footer with timestamp */}
-      <Text color={palette.border}>{borders.leftTee}{line}{borders.rightTee}</Text>
-      <InkBox>
-        <Text color={palette.border}>{borders.vertical} </Text>
+      <PanelRow>
         <Text color={palette.textTertiary}>
           As of {profile.asOfDate.toLocaleString('en-US', {
             month: 'short',
@@ -293,11 +318,8 @@ export function StockProfile({ profile, quickTake, relatedStocks }: StockProfile
             minute: '2-digit'
           })}
         </Text>
-      </InkBox>
-
-      {/* Bottom border */}
-      <Text color={palette.border}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-    </InkBox>
+      </PanelRow>
+    </Panel>
   );
 }
 

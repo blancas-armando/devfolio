@@ -32,6 +32,7 @@ const sections: CommandSection[] = [
       { cmd: 'r <SYM>', desc: 'AI research report' },
       { cmd: 'e <SYM>', desc: 'Earnings report' },
       { cmd: 'fin <SYM> [type]', desc: 'Financial statements' },
+      { cmd: 'hist <SYM>', desc: 'Historical trends & milestones' },
       { cmd: 'why <SYM>', desc: 'Explain stock movement' },
       { cmd: 'cs <S1> <S2>...', desc: 'Compare stocks' },
     ],

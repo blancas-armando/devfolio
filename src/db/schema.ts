@@ -44,5 +44,12 @@ export function initializeSchema(db: Database.Database) {
       UNIQUE(group_id, symbol)
     );
     CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id);
+
+    -- ASCII logo cache for company logos
+    CREATE TABLE IF NOT EXISTS logo_cache (
+      symbol TEXT PRIMARY KEY,
+      ascii_art TEXT NOT NULL,
+      cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 }

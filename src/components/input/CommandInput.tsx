@@ -33,8 +33,8 @@ export interface CommandInputProps {
   showHints?: boolean;
   /** Model name to display */
   modelName?: string;
-  /** Width */
-  width?: number | 'compact' | 'standard' | 'full';
+  /** Width - use 'terminal' for full terminal width */
+  width?: number | 'compact' | 'standard' | 'full' | 'terminal';
 }
 
 export function CommandInput({

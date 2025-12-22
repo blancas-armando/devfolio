@@ -50,8 +50,8 @@ import { getLastNewsArticles, getLastFilings, getLastFilingsSymbol } from './sta
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function parseStockCommand(input: string): { symbol: string; timeframe?: string } | null {
-  // Match: s AAPL, s AAPL 1y, stock MSFT 3m
-  const stockMatch = input.match(/^(?:s|stock)\s+([A-Za-z]{1,5})(?:\s+(1d|5d|1m|3m|6m|1y|5y))?$/i);
+  // Match: s AAPL, s AAPL 1y, stock MSFT 3m, s AAPL max
+  const stockMatch = input.match(/^(?:s|stock)\s+([A-Za-z]{1,5})(?:\s+(1d|5d|1m|3m|6m|1y|5y|10y|max|all))?$/i);
   if (stockMatch) {
     return {
       symbol: stockMatch[1].toUpperCase(),
@@ -107,21 +107,48 @@ export function parseWhyCommand(input: string): string | null {
   return null;
 }
 
-export function parseFinancialsCommand(input: string): { symbol: string; type?: 'income' | 'balance' | 'cashflow' } | null {
-  // Match: fin AAPL, fin AAPL income, financials MSFT balance
-  const match = input.match(/^(?:fin|financials|statements)\s+([A-Za-z]{1,5})(?:\s+(income|balance|cashflow|cf|is|bs))?$/i);
+export interface FinancialsCommandResult {
+  symbol: string;
+  type?: 'income' | 'balance' | 'cashflow';
+  period: 'annual' | 'quarterly';
+}
+
+export function parseFinancialsCommand(input: string): FinancialsCommandResult | null {
+  // Match: fin AAPL, fin AAPL income, fin AAPL q, fin AAPL income q
+  const match = input.match(/^(?:fin|financials|statements)\s+([A-Za-z]{1,5})(?:\s+(income|balance|cashflow|cf|is|bs|q|quarterly))?(?:\s+(q|quarterly))?$/i);
   if (match) {
     const symbol = match[1].toUpperCase();
     let type: 'income' | 'balance' | 'cashflow' | undefined;
+    let period: 'annual' | 'quarterly' = 'annual';
 
-    if (match[2]) {
-      const typeStr = match[2].toLowerCase();
-      if (typeStr === 'income' || typeStr === 'is') type = 'income';
-      else if (typeStr === 'balance' || typeStr === 'bs') type = 'balance';
-      else if (typeStr === 'cashflow' || typeStr === 'cf') type = 'cashflow';
+    // Check both capture groups for type and period
+    const args = [match[2], match[3]].filter(Boolean).map(s => s.toLowerCase());
+
+    for (const arg of args) {
+      if (arg === 'income' || arg === 'is') type = 'income';
+      else if (arg === 'balance' || arg === 'bs') type = 'balance';
+      else if (arg === 'cashflow' || arg === 'cf') type = 'cashflow';
+      else if (arg === 'q' || arg === 'quarterly') period = 'quarterly';
     }
 
-    return { symbol, type };
+    return { symbol, type, period };
+  }
+  return null;
+}
+
+export interface HistoryCommandResult {
+  symbol: string;
+  period: 'annual' | 'quarterly';
+}
+
+export function parseHistoryCommand(input: string): HistoryCommandResult | null {
+  // Match: history AAPL, hist AAPL, hist AAPL q, hist AAPL quarterly
+  const match = input.match(/^(?:history|hist)\s+([A-Za-z]{1,5})(?:\s+(q|quarterly))?$/i);
+  if (match) {
+    return {
+      symbol: match[1].toUpperCase(),
+      period: match[2] ? 'quarterly' : 'annual',
+    };
   }
   return null;
 }
@@ -133,8 +160,8 @@ export function parseFinancialsCommand(input: string): { symbol: string; type?: 
 export async function showStock(symbol: string, timeframe?: string): Promise<void> {
   const upperSymbol = symbol.toUpperCase();
 
-  // Fetch profile first
-  const profile = await getCompanyProfile(upperSymbol);
+  // Fetch profile with timeframe for historical data
+  const profile = await getCompanyProfile(upperSymbol, timeframe);
 
   if (!profile) {
     displayActionableError({
@@ -158,8 +185,7 @@ export async function showStock(symbol: string, timeframe?: string): Promise<voi
     getRelatedStocks(upperSymbol),
   ]);
 
-  // Note: timeframe will be used when displayCompanyProfile is extended to support it
-  displayCompanyProfile(profile, quickTake, relatedStocks);
+  displayCompanyProfile(profile, quickTake, relatedStocks, timeframe);
 }
 
 export async function showStockComparison(symbols: string[]): Promise<void> {

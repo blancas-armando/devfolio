@@ -9,12 +9,12 @@ import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import { chars, borderStyle } from '../../design/borders.js';
 import { palette } from '../../design/tokens.js';
-import { width as widthConstants } from '../../design/spacing.js';
+import { width as widthConstants, getTerminalWidth } from '../../design/spacing.js';
 
 export interface InputBoxProps {
   children: React.ReactNode;
-  /** Width of the box */
-  width?: number | 'compact' | 'standard' | 'full';
+  /** Width of the box - use 'terminal' for full terminal width */
+  width?: number | 'compact' | 'standard' | 'full' | 'terminal';
   /** Border color */
   borderColor?: string;
   /** Whether input is focused */
@@ -33,9 +33,11 @@ export function InputBox({
   prompt = '>',
   promptColor = palette.accent,
 }: InputBoxProps): React.ReactElement {
-  // Resolve width
+  // Resolve width - 'terminal' uses full terminal width
   const resolvedWidth = typeof width === 'number'
     ? width
+    : width === 'terminal'
+    ? getTerminalWidth()
     : widthConstants[width];
 
   const style = borderStyle.rounded;
@@ -95,8 +97,8 @@ export function MinimalInput({
 // Input area with status line below
 export interface InputAreaProps {
   children: React.ReactNode;
-  /** Width of the area */
-  width?: number | 'compact' | 'standard' | 'full';
+  /** Width of the area - use 'terminal' for full terminal width */
+  width?: number | 'compact' | 'standard' | 'full' | 'terminal';
   /** Status line content (left side) */
   statusLeft?: React.ReactNode;
   /** Status line content (right side) */
@@ -112,9 +114,11 @@ export function InputArea({
   statusRight,
   showBorder = true,
 }: InputAreaProps): React.ReactElement {
-  // Resolve width
+  // Resolve width - 'terminal' uses full terminal width
   const resolvedWidth = typeof width === 'number'
     ? width
+    : width === 'terminal'
+    ? getTerminalWidth()
     : widthConstants[width];
 
   return (

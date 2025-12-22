@@ -5,9 +5,9 @@
 
 import chalk from 'chalk';
 import type { NewsArticle, ArticleContent } from '../../services/market.js';
-import type { SECFiling } from '../../services/sec.js';
-import { getFilingText, extractKeySections, identify8KItems } from '../../services/sec.js';
-import { stripAnsi, wrapText } from '../ui.js';
+import type { SECFiling, FilingSummary } from '../../services/sec.js';
+import { generateFilingSummary } from '../../services/sec.js';
+import { stripAnsi, wrapText, showSpinner, hyperlink } from '../ui.js';
 import { setLastNewsArticles, setLastFilings } from '../state.js';
 import { analyzeSentiment, getSentimentIndicator } from '../../utils/sentiment.js';
 
@@ -229,6 +229,13 @@ export async function displayFiling(filing: SECFiling, symbol: string): Promise<
   const width = 78;
   const innerWidth = width - 4;
 
+  // Show loading spinner while generating AI summary
+  const stopSpinner = showSpinner('Analyzing filing...');
+
+  const summary = await generateFilingSummary(filing, symbol);
+
+  stopSpinner();
+
   console.log('');
   console.log(chalk.magenta('╭' + '─'.repeat(width - 2) + '╮'));
 
@@ -237,100 +244,98 @@ export async function displayFiling(filing: SECFiling, symbol: string): Promise<
                     filing.form === '10-Q' ? chalk.blue :
                     filing.form === '8-K' ? chalk.yellow : chalk.white;
 
-  const title = `${symbol.toUpperCase()} - ${filing.form}`;
-  const titlePad = Math.max(0, innerWidth - title.length);
-  console.log(chalk.magenta('│') + ' ' + chalk.bold.white(title) + ' '.repeat(titlePad) + ' ' + chalk.magenta('│'));
+  const title = `${symbol.toUpperCase()} - ${formColor(filing.form)}`;
+  const titleStripped = stripAnsi(title);
+  const titlePad = Math.max(0, innerWidth - titleStripped.length);
+  console.log(chalk.magenta('│') + ' ' + chalk.bold.white(symbol.toUpperCase()) + ' - ' + formColor(filing.form) + ' '.repeat(titlePad) + ' ' + chalk.magenta('│'));
 
   // Filing meta
   const meta = `Filed: ${filing.filingDate} | Report Date: ${filing.reportDate}`;
   console.log(chalk.magenta('│') + ' ' + chalk.dim(meta) + ' '.repeat(Math.max(0, innerWidth - meta.length)) + ' ' + chalk.magenta('│'));
 
-  console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
-
-  // Description
-  const descLabel = chalk.bold.yellow('Description');
-  console.log(chalk.magenta('│') + ' ' + descLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(descLabel).length)) + ' ' + chalk.magenta('│'));
-
-  const descLines = wrapText(filing.description, innerWidth - 2);
-  for (const line of descLines) {
-    console.log(chalk.magenta('│') + ' ' + chalk.white(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
+  // Sentiment badge
+  if (summary) {
+    const sentimentColor = summary.sentiment === 'positive' ? chalk.green :
+                           summary.sentiment === 'negative' ? chalk.red :
+                           summary.sentiment === 'mixed' ? chalk.yellow : chalk.dim;
+    const sentimentIcon = summary.sentiment === 'positive' ? '+' :
+                          summary.sentiment === 'negative' ? '-' :
+                          summary.sentiment === 'mixed' ? '~' : '=';
+    const sentimentLine = sentimentColor(`[${sentimentIcon}] ${summary.sentiment.toUpperCase()}`);
+    const sentimentStripped = stripAnsi(sentimentLine);
+    console.log(chalk.magenta('│') + ' ' + sentimentLine + ' '.repeat(Math.max(0, innerWidth - sentimentStripped.length)) + ' ' + chalk.magenta('│'));
   }
 
-  console.log(chalk.magenta('│') + ' '.repeat(innerWidth) + ' ' + chalk.magenta('│'));
+  console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
 
-  // Fetch and parse the filing content
-  const text = await getFilingText(filing, 80000);
-
-  if (!text) {
-    const errorMsg = chalk.red('Could not fetch filing content');
+  if (!summary) {
+    // Error case - couldn't generate summary
+    const errorMsg = chalk.red('Could not generate summary. Check your API key.');
     console.log(chalk.magenta('│') + ' ' + errorMsg + ' '.repeat(Math.max(0, innerWidth - stripAnsi(errorMsg).length)) + ' ' + chalk.magenta('│'));
   } else {
-    // For 8-K filings, identify the event types
-    if (filing.form === '8-K') {
-      const items = identify8KItems(text);
-      if (items.length > 0) {
-        console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
-        const eventsLabel = chalk.bold.yellow('Event Types');
-        console.log(chalk.magenta('│') + ' ' + eventsLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(eventsLabel).length)) + ' ' + chalk.magenta('│'));
+    // AI Summary Section
+    const summaryLabel = chalk.bold.yellow('Summary');
+    console.log(chalk.magenta('│') + ' ' + summaryLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(summaryLabel).length)) + ' ' + chalk.magenta('│'));
 
-        for (const item of items.slice(0, 5)) {
-          const itemLine = `• ${item}`;
-          const truncItem = itemLine.length > innerWidth - 2 ? itemLine.slice(0, innerWidth - 5) + '...' : itemLine;
-          console.log(chalk.magenta('│') + ' ' + chalk.white(truncItem) + ' '.repeat(Math.max(0, innerWidth - truncItem.length)) + ' ' + chalk.magenta('│'));
+    const summaryLines = wrapText(summary.summary, innerWidth - 2);
+    for (const line of summaryLines) {
+      console.log(chalk.magenta('│') + ' ' + chalk.white(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
+    }
+
+    console.log(chalk.magenta('│') + ' '.repeat(innerWidth) + ' ' + chalk.magenta('│'));
+
+    // Key Points Section
+    if (summary.keyPoints.length > 0) {
+      console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
+      const keyLabel = chalk.bold.yellow('Key Points');
+      console.log(chalk.magenta('│') + ' ' + keyLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(keyLabel).length)) + ' ' + chalk.magenta('│'));
+
+      for (const point of summary.keyPoints.slice(0, 5)) {
+        const pointLines = wrapText(`- ${point}`, innerWidth - 2);
+        for (const line of pointLines) {
+          console.log(chalk.magenta('│') + ' ' + chalk.white(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
         }
       }
     }
 
-    // Extract key sections for 10-K/10-Q
-    const sections = extractKeySections(text);
-    if (sections.length > 0) {
-      for (const section of sections.slice(0, 3)) {
-        console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
-        const sectionLabel = chalk.bold.yellow(section.title);
-        console.log(chalk.magenta('│') + ' ' + sectionLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(sectionLabel).length)) + ' ' + chalk.magenta('│'));
-        console.log(chalk.magenta('│') + ' '.repeat(innerWidth) + ' ' + chalk.magenta('│'));
-
-        // Clean and wrap content
-        const cleanContent = section.content
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 800);
-
-        const contentLines = wrapText(cleanContent, innerWidth - 2);
-        for (const line of contentLines.slice(0, 12)) {
-          console.log(chalk.magenta('│') + ' ' + chalk.dim(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
-        }
-        if (contentLines.length > 12) {
-          console.log(chalk.magenta('│') + ' ' + chalk.dim('...') + ' '.repeat(innerWidth - 3) + ' ' + chalk.magenta('│'));
-        }
-      }
-    } else {
-      // If no sections extracted, show raw text excerpt
+    // Material Events (for 8-K)
+    if (summary.materialEvents && summary.materialEvents.length > 0) {
       console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
-      const excerptLabel = chalk.bold.yellow('Filing Excerpt');
-      console.log(chalk.magenta('│') + ' ' + excerptLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(excerptLabel).length)) + ' ' + chalk.magenta('│'));
-      console.log(chalk.magenta('│') + ' '.repeat(innerWidth) + ' ' + chalk.magenta('│'));
+      const eventsLabel = chalk.bold.yellow('Material Events');
+      console.log(chalk.magenta('│') + ' ' + eventsLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(eventsLabel).length)) + ' ' + chalk.magenta('│'));
 
-      const excerpt = text.slice(0, 1500).replace(/\s+/g, ' ').trim();
-      const excerptLines = wrapText(excerpt, innerWidth - 2);
-      for (const line of excerptLines.slice(0, 20)) {
-        console.log(chalk.magenta('│') + ' ' + chalk.dim(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
+      for (const event of summary.materialEvents.slice(0, 5)) {
+        const eventLines = wrapText(`- ${event}`, innerWidth - 2);
+        for (const line of eventLines) {
+          console.log(chalk.magenta('│') + ' ' + chalk.white(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
+        }
       }
-      if (excerptLines.length > 20) {
-        console.log(chalk.magenta('│') + ' ' + chalk.dim('...') + ' '.repeat(innerWidth - 3) + ' ' + chalk.magenta('│'));
+    }
+
+    // Sentiment Reason
+    if (summary.sentimentReason) {
+      console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
+      const reasonLabel = chalk.bold.yellow('Investor Impact');
+      console.log(chalk.magenta('│') + ' ' + reasonLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(reasonLabel).length)) + ' ' + chalk.magenta('│'));
+
+      const reasonLines = wrapText(summary.sentimentReason, innerWidth - 2);
+      for (const line of reasonLines) {
+        console.log(chalk.magenta('│') + ' ' + chalk.dim(line) + ' '.repeat(Math.max(0, innerWidth - line.length)) + ' ' + chalk.magenta('│'));
       }
     }
   }
 
-  // Footer with link
+  // Footer with clickable link to full document
   console.log(chalk.magenta('├' + '─'.repeat(width - 2) + '┤'));
-  const linkLabel = 'Full document: ';
-  const maxUrlLen = innerWidth - linkLabel.length - 2;
-  const truncUrl = filing.fileUrl.length > maxUrlLen
-    ? filing.fileUrl.slice(0, maxUrlLen - 3) + '...'
+  const linkLabel = chalk.bold('View Full Filing:');
+  console.log(chalk.magenta('│') + ' ' + linkLabel + ' '.repeat(Math.max(0, innerWidth - stripAnsi(linkLabel).length)) + ' ' + chalk.magenta('│'));
+
+  // Show clickable hyperlink (truncated display, full URL in link)
+  const displayUrl = filing.fileUrl.length > innerWidth - 4
+    ? filing.fileUrl.slice(0, innerWidth - 7) + '...'
     : filing.fileUrl;
-  const linkLine = chalk.dim(linkLabel) + chalk.blue.underline(truncUrl);
-  console.log(chalk.magenta('│') + ' ' + linkLine + ' '.repeat(Math.max(0, innerWidth - stripAnsi(linkLine).length)) + ' ' + chalk.magenta('│'));
+  const linkLine = hyperlink(filing.fileUrl, displayUrl);
+  console.log(chalk.magenta('│') + ' ' + linkLine + ' '.repeat(Math.max(0, innerWidth - displayUrl.length)) + ' ' + chalk.magenta('│'));
 
   console.log(chalk.magenta('╰' + '─'.repeat(width - 2) + '╯'));
   console.log('');

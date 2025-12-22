@@ -7,8 +7,8 @@
 import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import type { NewsArticle } from '../../services/market.js';
+import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
-import { borders } from '../../design/borders.js';
 import { symbols } from '../../design/symbols.js';
 import { analyzeSentiment, getSentimentIndicator } from '../../utils/sentiment.js';
 
@@ -54,7 +54,7 @@ function NewsArticleRow({
       : palette.textTertiary;
 
   // Truncate title
-  const maxTitleLen = 60;
+  const maxTitleLen = 58;
   const truncTitle = article.title.length > maxTitleLen
     ? article.title.slice(0, maxTitleLen - 3) + '...'
     : article.title;
@@ -62,29 +62,31 @@ function NewsArticleRow({
   const symbolsStr = article.symbols.slice(0, 3).join(', ');
 
   return (
-    <InkBox flexDirection="column">
+    <>
       {/* Title line */}
-      <InkBox>
+      <PanelRow>
         <Text color={palette.info}>[{index + 1}]</Text>
         <Text> </Text>
         <Text color={sentimentColor}>{sentimentIndicator}</Text>
         <Text> </Text>
         <Text color={palette.text}>{truncTitle}</Text>
-      </InkBox>
+      </PanelRow>
 
       {/* Meta line */}
-      <InkBox marginLeft={4}>
-        <Text color={palette.textTertiary}>{article.publisher}</Text>
-        <Text color={palette.textTertiary}> {symbols.bullet} </Text>
-        <Text color={palette.textTertiary}>{timeAgo}</Text>
-        {symbolsStr && (
-          <>
-            <Text color={palette.textTertiary}> {symbols.bullet} </Text>
-            <Text color={semantic.command}>{symbolsStr}</Text>
-          </>
-        )}
-      </InkBox>
-    </InkBox>
+      <PanelRow>
+        <InkBox marginLeft={4}>
+          <Text color={palette.textTertiary}>{article.publisher}</Text>
+          <Text color={palette.textTertiary}> {symbols.bullet} </Text>
+          <Text color={palette.textTertiary}>{timeAgo}</Text>
+          {symbolsStr && (
+            <>
+              <Text color={palette.textTertiary}> {symbols.bullet} </Text>
+              <Text color={semantic.command}>{symbolsStr}</Text>
+            </>
+          )}
+        </InkBox>
+      </PanelRow>
+    </>
   );
 }
 
@@ -93,8 +95,6 @@ export function NewsFeed({
   symbols: forSymbols,
   maxArticles = 12,
 }: NewsFeedProps): React.ReactElement {
-  const width = 72;
-  const line = borders.horizontal.repeat(width - 2);
   const displayArticles = articles.slice(0, maxArticles);
 
   const title = forSymbols && forSymbols.length > 0
@@ -102,38 +102,30 @@ export function NewsFeed({
     : 'Market News';
 
   return (
-    <InkBox flexDirection="column" marginY={1}>
-      {/* Header */}
-      <Text color={palette.info}>{borders.topLeft}{line}{borders.topRight}</Text>
-      <InkBox>
-        <Text color={palette.info}>{borders.vertical} </Text>
-        <Text bold color={palette.text}>{title}</Text>
-      </InkBox>
-      <Text color={palette.info}>{borders.leftTee}{line}{borders.rightTee}</Text>
-
+    <Panel width={72} title={title}>
       {/* Articles */}
       {displayArticles.length === 0 ? (
-        <InkBox paddingX={2}>
+        <PanelRow>
           <Text color={palette.textTertiary}>No recent news available</Text>
-        </InkBox>
+        </PanelRow>
       ) : (
-        <InkBox flexDirection="column" paddingX={1}>
+        <>
           {displayArticles.map((article, index) => (
-            <InkBox key={article.link} flexDirection="column" marginBottom={index < displayArticles.length - 1 ? 1 : 0}>
+            <React.Fragment key={article.link}>
               <NewsArticleRow article={article} index={index} />
-            </InkBox>
+              {index < displayArticles.length - 1 && <PanelRow><Text> </Text></PanelRow>}
+            </React.Fragment>
           ))}
-        </InkBox>
+        </>
       )}
 
       {/* Footer */}
-      <Text color={palette.info}>{borders.leftTee}{line}{borders.rightTee}</Text>
-      <InkBox>
-        <Text color={palette.info}>{borders.vertical} </Text>
-        <Text color={palette.textTertiary}>Type "read N" to read article</Text>
-      </InkBox>
-      <Text color={palette.info}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-    </InkBox>
+      <Section>
+        <PanelRow>
+          <Text color={palette.textTertiary}>Type "read N" to read article</Text>
+        </PanelRow>
+      </Section>
+    </Panel>
   );
 }
 

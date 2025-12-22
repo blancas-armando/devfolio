@@ -8,8 +8,8 @@
 import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import type { CompanyProfile } from '../../services/market.js';
+import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
-import { borders } from '../../design/borders.js';
 import { symbols } from '../../design/symbols.js';
 
 export interface StockComparisonProps {
@@ -43,14 +43,15 @@ function formatPrice(num: number): string {
 }
 
 // Comparison row
-function CompRow({ label, values, format, highlightBest }: {
+function CompRow({ label, values, format, highlightBest, stockCount }: {
   label: string;
   values: (string | number | null)[];
   format?: 'price' | 'pct' | 'ratio' | 'compact' | 'raw';
   highlightBest?: 'high' | 'low';
+  stockCount: number;
 }): React.ReactElement {
   const labelWidth = 16;
-  const colWidth = Math.floor((76 - labelWidth) / Math.max(values.length, 1));
+  const colWidth = Math.floor((72 - labelWidth) / Math.max(stockCount, 1));
 
   const formatValue = (val: string | number | null): string => {
     if (val === null) return '--';
@@ -76,7 +77,7 @@ function CompRow({ label, values, format, highlightBest }: {
   }
 
   return (
-    <InkBox>
+    <PanelRow>
       <InkBox width={labelWidth}>
         <Text color={palette.textTertiary}>{label}</Text>
       </InkBox>
@@ -87,51 +88,28 @@ function CompRow({ label, values, format, highlightBest }: {
           </Text>
         </InkBox>
       ))}
-    </InkBox>
-  );
-}
-
-// Section header
-function SectionHeader({ title, width }: { title: string; width: number }): React.ReactElement {
-  const line = borders.horizontal.repeat(width - title.length - 5);
-  return (
-    <InkBox>
-      <Text color={palette.info}>
-        {borders.leftTee}{borders.horizontal} {title} {line}{borders.rightTee}
-      </Text>
-    </InkBox>
+    </PanelRow>
   );
 }
 
 export function StockComparisonView({ stocks }: StockComparisonProps): React.ReactElement {
-  const width = 78;
-  const line = borders.horizontal.repeat(width - 2);
   const labelWidth = 16;
-  const colWidth = Math.floor((76 - labelWidth) / Math.max(stocks.length, 1));
+  const colWidth = Math.floor((72 - labelWidth) / Math.max(stocks.length, 1));
 
   if (stocks.length === 0) {
     return (
-      <InkBox flexDirection="column" marginY={1}>
-        <Text color={palette.info}>{borders.topLeft}{line}{borders.topRight}</Text>
-        <InkBox paddingX={1}>
+      <Panel width={78} title="Stock Comparison">
+        <PanelRow>
           <Text color={palette.textTertiary}>No stocks to compare</Text>
-        </InkBox>
-        <Text color={palette.info}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-      </InkBox>
+        </PanelRow>
+      </Panel>
     );
   }
 
   return (
-    <InkBox flexDirection="column" marginY={1}>
-      {/* Header */}
-      <Text color={palette.info}>{borders.topLeft}{line}{borders.topRight}</Text>
-      <InkBox paddingX={1}>
-        <Text bold color={palette.text}>Stock Comparison</Text>
-      </InkBox>
-
+    <Panel width={78} title="Stock Comparison">
       {/* Symbol row */}
-      <Text color={palette.info}>{borders.leftTee}{line}{borders.rightTee}</Text>
-      <InkBox paddingX={1}>
+      <PanelRow>
         <InkBox width={labelWidth}>
           <Text color={palette.textTertiary}>Symbol</Text>
         </InkBox>
@@ -140,10 +118,10 @@ export function StockComparisonView({ stocks }: StockComparisonProps): React.Rea
             <Text bold color={palette.text}>{s.symbol}</Text>
           </InkBox>
         ))}
-      </InkBox>
+      </PanelRow>
 
       {/* Company names */}
-      <InkBox paddingX={1}>
+      <PanelRow>
         <InkBox width={labelWidth}>
           <Text color={palette.textTertiary}>Name</Text>
         </InkBox>
@@ -154,13 +132,12 @@ export function StockComparisonView({ stocks }: StockComparisonProps): React.Rea
             </Text>
           </InkBox>
         ))}
-      </InkBox>
+      </PanelRow>
 
       {/* Price & Change */}
-      <SectionHeader title="Price" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Price" values={stocks.map(s => s.price)} format="price" />
-        <InkBox>
+      <Section title="Price">
+        <CompRow label="Price" values={stocks.map(s => s.price)} format="price" stockCount={stocks.length} />
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>Change</Text>
           </InkBox>
@@ -171,53 +148,48 @@ export function StockComparisonView({ stocks }: StockComparisonProps): React.Rea
               </Text>
             </InkBox>
           ))}
-        </InkBox>
-        <CompRow label="52W High" values={stocks.map(s => s.high52w)} format="price" />
-        <CompRow label="52W Low" values={stocks.map(s => s.low52w)} format="price" />
-      </InkBox>
+        </PanelRow>
+        <CompRow label="52W High" values={stocks.map(s => s.high52w)} format="price" stockCount={stocks.length} />
+        <CompRow label="52W Low" values={stocks.map(s => s.low52w)} format="price" stockCount={stocks.length} />
+      </Section>
 
       {/* Valuation */}
-      <SectionHeader title="Valuation" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Market Cap" values={stocks.map(s => s.marketCap)} format="compact" highlightBest="high" />
-        <CompRow label="P/E Ratio" values={stocks.map(s => s.peRatio)} format="ratio" highlightBest="low" />
-        <CompRow label="Forward P/E" values={stocks.map(s => s.forwardPE)} format="ratio" highlightBest="low" />
-        <CompRow label="PEG Ratio" values={stocks.map(s => s.pegRatio)} format="ratio" highlightBest="low" />
-        <CompRow label="P/S Ratio" values={stocks.map(s => s.priceToSales)} format="ratio" highlightBest="low" />
-        <CompRow label="EV/EBITDA" values={stocks.map(s => s.evToEbitda)} format="ratio" highlightBest="low" />
-      </InkBox>
+      <Section title="Valuation">
+        <CompRow label="Market Cap" values={stocks.map(s => s.marketCap)} format="compact" highlightBest="high" stockCount={stocks.length} />
+        <CompRow label="P/E Ratio" values={stocks.map(s => s.peRatio)} format="ratio" highlightBest="low" stockCount={stocks.length} />
+        <CompRow label="Forward P/E" values={stocks.map(s => s.forwardPE)} format="ratio" highlightBest="low" stockCount={stocks.length} />
+        <CompRow label="PEG Ratio" values={stocks.map(s => s.pegRatio)} format="ratio" highlightBest="low" stockCount={stocks.length} />
+        <CompRow label="P/S Ratio" values={stocks.map(s => s.priceToSales)} format="ratio" highlightBest="low" stockCount={stocks.length} />
+        <CompRow label="EV/EBITDA" values={stocks.map(s => s.evToEbitda)} format="ratio" highlightBest="low" stockCount={stocks.length} />
+      </Section>
 
       {/* Financials */}
-      <SectionHeader title="Financials" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Revenue" values={stocks.map(s => s.revenue)} format="compact" highlightBest="high" />
-        <CompRow label="Rev Growth" values={stocks.map(s => s.revenueGrowth ? s.revenueGrowth * 100 : null)} format="pct" highlightBest="high" />
-        <CompRow label="Gross Margin" values={stocks.map(s => s.grossMargin ? s.grossMargin * 100 : null)} format="pct" highlightBest="high" />
-        <CompRow label="Op Margin" values={stocks.map(s => s.operatingMargin ? s.operatingMargin * 100 : null)} format="pct" highlightBest="high" />
-        <CompRow label="Net Margin" values={stocks.map(s => s.profitMargin ? s.profitMargin * 100 : null)} format="pct" highlightBest="high" />
-        <CompRow label="EPS" values={stocks.map(s => s.eps)} format="price" highlightBest="high" />
-      </InkBox>
+      <Section title="Financials">
+        <CompRow label="Revenue" values={stocks.map(s => s.revenue)} format="compact" highlightBest="high" stockCount={stocks.length} />
+        <CompRow label="Rev Growth" values={stocks.map(s => s.revenueGrowth ? s.revenueGrowth * 100 : null)} format="pct" highlightBest="high" stockCount={stocks.length} />
+        <CompRow label="Gross Margin" values={stocks.map(s => s.grossMargin ? s.grossMargin * 100 : null)} format="pct" highlightBest="high" stockCount={stocks.length} />
+        <CompRow label="Op Margin" values={stocks.map(s => s.operatingMargin ? s.operatingMargin * 100 : null)} format="pct" highlightBest="high" stockCount={stocks.length} />
+        <CompRow label="Net Margin" values={stocks.map(s => s.profitMargin ? s.profitMargin * 100 : null)} format="pct" highlightBest="high" stockCount={stocks.length} />
+        <CompRow label="EPS" values={stocks.map(s => s.eps)} format="price" highlightBest="high" stockCount={stocks.length} />
+      </Section>
 
       {/* Balance Sheet */}
-      <SectionHeader title="Balance Sheet" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Total Cash" values={stocks.map(s => s.totalCash)} format="compact" highlightBest="high" />
-        <CompRow label="Total Debt" values={stocks.map(s => s.totalDebt)} format="compact" highlightBest="low" />
-        <CompRow label="Debt/Equity" values={stocks.map(s => s.debtToEquity)} format="ratio" highlightBest="low" />
-        <CompRow label="Current Ratio" values={stocks.map(s => s.currentRatio)} format="ratio" highlightBest="high" />
-      </InkBox>
+      <Section title="Balance Sheet">
+        <CompRow label="Total Cash" values={stocks.map(s => s.totalCash)} format="compact" highlightBest="high" stockCount={stocks.length} />
+        <CompRow label="Total Debt" values={stocks.map(s => s.totalDebt)} format="compact" highlightBest="low" stockCount={stocks.length} />
+        <CompRow label="Debt/Equity" values={stocks.map(s => s.debtToEquity)} format="ratio" highlightBest="low" stockCount={stocks.length} />
+        <CompRow label="Current Ratio" values={stocks.map(s => s.currentRatio)} format="ratio" highlightBest="high" stockCount={stocks.length} />
+      </Section>
 
       {/* Dividends */}
-      <SectionHeader title="Dividends" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Div Yield" values={stocks.map(s => s.dividendYield ? s.dividendYield * 100 : null)} format="pct" highlightBest="high" />
-        <CompRow label="Payout Ratio" values={stocks.map(s => s.payoutRatio ? s.payoutRatio * 100 : null)} format="pct" />
-      </InkBox>
+      <Section title="Dividends">
+        <CompRow label="Div Yield" values={stocks.map(s => s.dividendYield ? s.dividendYield * 100 : null)} format="pct" highlightBest="high" stockCount={stocks.length} />
+        <CompRow label="Payout Ratio" values={stocks.map(s => s.payoutRatio ? s.payoutRatio * 100 : null)} format="pct" stockCount={stocks.length} />
+      </Section>
 
       {/* Performance */}
-      <SectionHeader title="Performance" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <InkBox>
+      <Section title="Performance">
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>3M Return</Text>
           </InkBox>
@@ -228,8 +200,8 @@ export function StockComparisonView({ stocks }: StockComparisonProps): React.Rea
               </Text>
             </InkBox>
           ))}
-        </InkBox>
-        <InkBox>
+        </PanelRow>
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>YTD Return</Text>
           </InkBox>
@@ -240,15 +212,14 @@ export function StockComparisonView({ stocks }: StockComparisonProps): React.Rea
               </Text>
             </InkBox>
           ))}
-        </InkBox>
-        <CompRow label="Beta" values={stocks.map(s => s.beta)} format="ratio" />
-      </InkBox>
+        </PanelRow>
+        <CompRow label="Beta" values={stocks.map(s => s.beta)} format="ratio" stockCount={stocks.length} />
+      </Section>
 
       {/* Analyst Targets */}
-      <SectionHeader title="Analyst View" width={width} />
-      <InkBox flexDirection="column" paddingX={1}>
-        <CompRow label="Target Price" values={stocks.map(s => s.targetPrice)} format="price" />
-        <InkBox>
+      <Section title="Analyst View">
+        <CompRow label="Target Price" values={stocks.map(s => s.targetPrice)} format="price" stockCount={stocks.length} />
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>Upside</Text>
           </InkBox>
@@ -262,8 +233,8 @@ export function StockComparisonView({ stocks }: StockComparisonProps): React.Rea
               </InkBox>
             );
           })}
-        </InkBox>
-        <InkBox>
+        </PanelRow>
+        <PanelRow>
           <InkBox width={labelWidth}>
             <Text color={palette.textTertiary}>Rating</Text>
           </InkBox>
@@ -272,17 +243,16 @@ export function StockComparisonView({ stocks }: StockComparisonProps): React.Rea
               <Text color={palette.accent}>{s.recommendationKey?.toUpperCase() ?? '--'}</Text>
             </InkBox>
           ))}
-        </InkBox>
-      </InkBox>
+        </PanelRow>
+      </Section>
 
       {/* Footer */}
-      <InkBox paddingX={1} marginTop={1}>
+      <PanelRow>
         <Text color={palette.textTertiary}>
           Best values highlighted {symbols.bullet} Data as of {new Date().toLocaleDateString()}
         </Text>
-      </InkBox>
-      <Text color={palette.info}>{borders.bottomLeft}{line}{borders.bottomRight}</Text>
-    </InkBox>
+      </PanelRow>
+    </Panel>
   );
 }
 

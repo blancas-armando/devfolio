@@ -35,7 +35,21 @@ export const WIDTH = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function stripAnsi(str: string): string {
-  return str.replace(/\x1b\[[0-9;]*m/g, '');
+  // Strip both color codes and OSC 8 hyperlinks
+  return str
+    .replace(/\x1b\[[0-9;]*m/g, '')
+    .replace(/\x1b\]8;;[^\x07]*\x07([^\x1b]*)\x1b\]8;;\x07/g, '$1');
+}
+
+/**
+ * Create a clickable terminal hyperlink (OSC 8)
+ * Works in iTerm2, Windows Terminal, Hyper, and other modern terminals
+ * Falls back to plain text in unsupported terminals
+ */
+export function hyperlink(url: string, text?: string): string {
+  const displayText = text ?? url;
+  // OSC 8 hyperlink format: \x1b]8;;URL\x07TEXT\x1b]8;;\x07
+  return `\x1b]8;;${url}\x07${chalk.blue.underline(displayText)}\x1b]8;;\x07`;
 }
 
 export function truncateText(text: string, maxLength: number): string {

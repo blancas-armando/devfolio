@@ -103,9 +103,16 @@ export interface CompanyProfile {
 
   // Performance & Chart Data
   asOfDate: Date;
+  oneMonthReturn: number | null;
   threeMonthReturn: number | null;
+  sixMonthReturn: number | null;
   ytdReturn: number | null;
+  oneYearReturn: number | null;
+  threeYearReturn: number | null;
+  fiveYearReturn: number | null;
+  tenYearReturn: number | null;
   historicalPrices: number[];
+  historicalData: Array<{ date: Date; close: number }>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -149,8 +156,26 @@ export async function getQuotes(symbols: string[]): Promise<Quote[]> {
 // Company Profile
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function getCompanyProfile(symbol: string): Promise<CompanyProfile | null> {
-  const cacheKey = `profile:${symbol}`;
+// Timeframe to days mapping (defined here for use in getCompanyProfile)
+const TIMEFRAME_DAYS: Record<string, number> = {
+  '1d': 1,
+  '5d': 5,
+  '1m': 30,
+  '3m': 90,
+  '6m': 180,
+  '1y': 365,
+  '5y': 1825,
+  '10y': 3650,
+  'max': 18250, // ~50 years - covers most stock histories
+  'all': 18250,
+};
+
+export async function getCompanyProfile(
+  symbol: string,
+  timeframe?: string
+): Promise<CompanyProfile | null> {
+  const days = timeframe ? (TIMEFRAME_DAYS[timeframe] ?? 90) : 90;
+  const cacheKey = `profile:${symbol}:${days}`;
   const cached = getCached<CompanyProfile>(cacheKey);
   if (cached) return cached;
 
@@ -176,10 +201,11 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
     if (!price) return null;
 
     // Fetch historical prices and performance returns
-    const [historicalPrices, perfReturns] = await Promise.all([
-      getHistoricalData(symbol, 90),
+    const [historicalDataWithDates, perfReturns] = await Promise.all([
+      getHistoricalDataWithDates(symbol, days),
       getPerformanceReturns(symbol),
     ]);
+    const historicalPrices = historicalDataWithDates.map(d => d.close);
 
     const companyProfile: CompanyProfile = {
       // Identity
@@ -255,9 +281,16 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
 
       // Performance & Chart Data
       asOfDate: new Date(),
+      oneMonthReturn: perfReturns.oneMonthReturn,
       threeMonthReturn: perfReturns.threeMonthReturn,
+      sixMonthReturn: perfReturns.sixMonthReturn,
       ytdReturn: perfReturns.ytdReturn,
+      oneYearReturn: perfReturns.oneYearReturn,
+      threeYearReturn: perfReturns.threeYearReturn,
+      fiveYearReturn: perfReturns.fiveYearReturn,
+      tenYearReturn: perfReturns.tenYearReturn,
       historicalPrices,
+      historicalData: historicalDataWithDates,
     };
 
     setCache(cacheKey, companyProfile, CACHE_TTL.quote * 2); // Cache longer for profiles
@@ -272,7 +305,7 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function compareStocks(symbols: string[]): Promise<CompanyProfile[]> {
-  const profiles = await Promise.all(symbols.map(getCompanyProfile));
+  const profiles = await Promise.all(symbols.map(s => getCompanyProfile(s)));
   return profiles.filter((p): p is CompanyProfile => p !== null);
 }
 
@@ -280,12 +313,25 @@ export async function compareStocks(symbols: string[]): Promise<CompanyProfile[]
 // Historical Data
 // ═══════════════════════════════════════════════════════════════════════════
 
+export interface HistoricalDataPoint {
+  date: Date;
+  close: number;
+}
+
 export async function getHistoricalData(
   symbol: string,
   days: number = HISTORICAL_DAYS
 ): Promise<number[]> {
-  const cacheKey = `historical:${symbol}:${days}`;
-  const cached = getCached<number[]>(cacheKey);
+  const dataWithDates = await getHistoricalDataWithDates(symbol, days);
+  return dataWithDates.map(d => d.close);
+}
+
+export async function getHistoricalDataWithDates(
+  symbol: string,
+  days: number = HISTORICAL_DAYS
+): Promise<HistoricalDataPoint[]> {
+  const cacheKey = `historical-dates:${symbol}:${days}`;
+  const cached = getCached<HistoricalDataPoint[]>(cacheKey);
   if (cached) return cached;
 
   try {
@@ -299,12 +345,15 @@ export async function getHistoricalData(
       interval: '1d',
     });
 
-    const closes = result.quotes
-      .map((q) => q.close)
-      .filter((c): c is number => c !== null && c !== undefined);
+    const dataPoints: HistoricalDataPoint[] = result.quotes
+      .filter((q) => q.date !== null && q.close !== null && q.close !== undefined)
+      .map((q) => ({
+        date: q.date!,
+        close: q.close!,
+      }));
 
-    setCache(cacheKey, closes, CACHE_TTL.historical);
-    return closes;
+    setCache(cacheKey, dataPoints, CACHE_TTL.historical);
+    return dataPoints;
   } catch {
     return [];
   }
@@ -409,8 +458,14 @@ export function parseTimeframe(input: string): ChartTimeframe | null {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface PerformanceReturns {
+  oneMonthReturn: number | null;
   threeMonthReturn: number | null;
+  sixMonthReturn: number | null;
   ytdReturn: number | null;
+  oneYearReturn: number | null;
+  threeYearReturn: number | null;
+  fiveYearReturn: number | null;
+  tenYearReturn: number | null;
 }
 
 export async function getPerformanceReturns(symbol: string): Promise<PerformanceReturns> {
@@ -421,54 +476,79 @@ export async function getPerformanceReturns(symbol: string): Promise<Performance
   try {
     const now = new Date();
 
-    // Calculate start dates
-    const threeMonthsAgo = new Date(now);
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-
-    const yearStart = new Date(now.getFullYear(), 0, 1); // Jan 1 of current year
-
-    // Use the earlier date for the API call
-    const startDate = yearStart < threeMonthsAgo ? yearStart : threeMonthsAgo;
+    // Fetch 10 years of data to calculate all returns
+    const tenYearsAgo = new Date(now);
+    tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
 
     const result = await yahooFinance.chart(symbol, {
-      period1: startDate,
+      period1: tenYearsAgo,
       period2: now,
-      interval: '1d',
+      interval: '1wk', // Weekly for longer history
     });
 
     const quotes = result.quotes.filter(q => q.close !== null && q.close !== undefined);
     if (quotes.length === 0) {
-      return { threeMonthReturn: null, ytdReturn: null };
+      return {
+        oneMonthReturn: null, threeMonthReturn: null, sixMonthReturn: null,
+        ytdReturn: null, oneYearReturn: null, threeYearReturn: null,
+        fiveYearReturn: null, tenYearReturn: null,
+      };
     }
 
     const currentPrice = quotes[quotes.length - 1].close!;
 
-    // Find YTD start price (first trading day of year or closest)
-    let ytdReturn: number | null = null;
-    const ytdQuote = quotes.find(q => {
-      const qDate = new Date(q.date);
-      return qDate.getFullYear() === now.getFullYear();
-    });
-    if (ytdQuote && ytdQuote.close) {
-      ytdReturn = ((currentPrice - ytdQuote.close) / ytdQuote.close) * 100;
-    }
+    // Helper to calculate return from a target date
+    const calcReturn = (targetDate: Date): number | null => {
+      const quote = quotes.find(q => new Date(q.date) >= targetDate);
+      if (quote && quote.close) {
+        return ((currentPrice - quote.close) / quote.close) * 100;
+      }
+      return null;
+    };
 
-    // Find 3M start price
-    let threeMonthReturn: number | null = null;
-    const threeMonthDate = new Date(now);
-    threeMonthDate.setMonth(threeMonthDate.getMonth() - 3);
+    // Calculate target dates
+    const oneMonthAgo = new Date(now);
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
-    // Find the quote closest to 3 months ago
-    const threeMonthQuote = quotes.find(q => new Date(q.date) >= threeMonthsAgo);
-    if (threeMonthQuote && threeMonthQuote.close) {
-      threeMonthReturn = ((currentPrice - threeMonthQuote.close) / threeMonthQuote.close) * 100;
-    }
+    const threeMonthsAgo = new Date(now);
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-    const returns = { threeMonthReturn, ytdReturn };
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const oneYearAgo = new Date(now);
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+    const threeYearsAgo = new Date(now);
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+
+    const fiveYearsAgo = new Date(now);
+    fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+
+    const tenYearsAgoDate = new Date(now);
+    tenYearsAgoDate.setFullYear(tenYearsAgoDate.getFullYear() - 10);
+
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+
+    const returns: PerformanceReturns = {
+      oneMonthReturn: calcReturn(oneMonthAgo),
+      threeMonthReturn: calcReturn(threeMonthsAgo),
+      sixMonthReturn: calcReturn(sixMonthsAgo),
+      ytdReturn: calcReturn(yearStart),
+      oneYearReturn: calcReturn(oneYearAgo),
+      threeYearReturn: calcReturn(threeYearsAgo),
+      fiveYearReturn: calcReturn(fiveYearsAgo),
+      tenYearReturn: calcReturn(tenYearsAgoDate),
+    };
+
     setCache(cacheKey, returns, CACHE_TTL.historical);
     return returns;
   } catch {
-    return { threeMonthReturn: null, ytdReturn: null };
+    return {
+      oneMonthReturn: null, threeMonthReturn: null, sixMonthReturn: null,
+      ytdReturn: null, oneYearReturn: null, threeYearReturn: null,
+      fiveYearReturn: null, tenYearReturn: null,
+    };
   }
 }
 
