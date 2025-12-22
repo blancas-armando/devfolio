@@ -259,7 +259,8 @@ export async function getCompanyProfile(
       // Price Data
       price: price.regularMarketPrice ?? 0,
       change: price.regularMarketChange ?? 0,
-      changePercent: price.regularMarketChangePercent ?? 0,
+      // quoteSummary returns decimals (0.08 = 8%), need to multiply by 100
+      changePercent: (price.regularMarketChangePercent ?? 0) * 100,
       high52w: detail?.fiftyTwoWeekHigh ?? null,
       low52w: detail?.fiftyTwoWeekLow ?? null,
       avgVolume: detail?.averageVolume ?? null,
@@ -271,17 +272,17 @@ export async function getCompanyProfile(
       floatShares: stats?.floatShares ?? null,
       beta: detail?.beta ?? null,
 
-      // Financials
+      // Financials (quoteSummary returns decimals for percentages)
       revenue: financial?.totalRevenue ?? null,
-      revenueGrowth: financial?.revenueGrowth ?? null,
+      revenueGrowth: financial?.revenueGrowth != null ? financial.revenueGrowth * 100 : null,
       grossProfit: financial?.grossProfits ?? null,
-      grossMargin: financial?.grossMargins ?? null,
-      operatingMargin: financial?.operatingMargins ?? null,
-      profitMargin: financial?.profitMargins ?? null,
+      grossMargin: financial?.grossMargins != null ? financial.grossMargins * 100 : null,
+      operatingMargin: financial?.operatingMargins != null ? financial.operatingMargins * 100 : null,
+      profitMargin: financial?.profitMargins != null ? financial.profitMargins * 100 : null,
       ebitda: financial?.ebitda ?? null,
       netIncome: stats?.netIncomeToCommon ?? null,
       eps: stats?.trailingEps ?? null,
-      epsGrowth: stats?.earningsQuarterlyGrowth ?? null,
+      epsGrowth: stats?.earningsQuarterlyGrowth != null ? stats.earningsQuarterlyGrowth * 100 : null,
       freeCashFlow: financial?.freeCashflow ?? null,
       operatingCashFlow: financial?.operatingCashflow ?? null,
       // CAPEX derived as OCF - FCF (represented as negative, so we negate)
@@ -305,10 +306,10 @@ export async function getCompanyProfile(
       evToRevenue: stats?.enterpriseToRevenue ?? null,
       evToEbitda: stats?.enterpriseToEbitda ?? null,
 
-      // Dividends
-      dividendYield: detail?.dividendYield ?? null,
+      // Dividends (quoteSummary returns decimals for percentages)
+      dividendYield: detail?.dividendYield != null ? detail.dividendYield * 100 : null,
       dividendRate: detail?.dividendRate ?? null,
-      payoutRatio: detail?.payoutRatio ?? null,
+      payoutRatio: detail?.payoutRatio != null ? detail.payoutRatio * 100 : null,
       exDividendDate: detail?.exDividendDate ? new Date(detail.exDividendDate).toLocaleDateString() : null,
 
       // Analyst Data
