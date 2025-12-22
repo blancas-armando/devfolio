@@ -119,10 +119,34 @@ export interface CompanyProfile {
 // Quote Functions
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function getQuote(symbol: string): Promise<Quote | null> {
+// Live mode flag - when true, bypass quote cache entirely
+let liveModeEnabled = false;
+
+export function setLiveMode(enabled: boolean): void {
+  liveModeEnabled = enabled;
+}
+
+export function isLiveModeEnabled(): boolean {
+  return liveModeEnabled;
+}
+
+export interface GetQuoteOptions {
+  /** Skip cache and fetch fresh data (default: false) */
+  fresh?: boolean;
+}
+
+export async function getQuote(
+  symbol: string,
+  options: GetQuoteOptions = {}
+): Promise<Quote | null> {
+  const { fresh = false } = options;
   const cacheKey = `quote:${symbol}`;
-  const cached = getCached<Quote>(cacheKey);
-  if (cached) return cached;
+
+  // Skip cache if: fresh requested, live mode enabled
+  if (!fresh && !liveModeEnabled) {
+    const cached = getCached<Quote>(cacheKey);
+    if (cached) return cached;
+  }
 
   try {
     const result = await yahooFinance.quote(symbol);
@@ -140,15 +164,19 @@ export async function getQuote(symbol: string): Promise<Quote | null> {
       low52w: result.fiftyTwoWeekLow,
     };
 
-    setCache(cacheKey, quote, CACHE_TTL.quote);
+    // Shorter cache for quotes - 10 seconds
+    setCache(cacheKey, quote, 10_000);
     return quote;
   } catch {
     return null;
   }
 }
 
-export async function getQuotes(symbols: string[]): Promise<Quote[]> {
-  const results = await Promise.all(symbols.map(getQuote));
+export async function getQuotes(
+  symbols: string[],
+  options: GetQuoteOptions = {}
+): Promise<Quote[]> {
+  const results = await Promise.all(symbols.map(s => getQuote(s, options)));
   return results.filter((q): q is Quote => q !== null);
 }
 
@@ -170,14 +198,25 @@ const TIMEFRAME_DAYS: Record<string, number> = {
   'all': 18250,
 };
 
+export interface GetProfileOptions {
+  /** Skip cache and fetch fresh data (default: false) */
+  fresh?: boolean;
+}
+
 export async function getCompanyProfile(
   symbol: string,
-  timeframe?: string
+  timeframe?: string,
+  options: GetProfileOptions = {}
 ): Promise<CompanyProfile | null> {
+  const { fresh = false } = options;
   const days = timeframe ? (TIMEFRAME_DAYS[timeframe] ?? 90) : 90;
   const cacheKey = `profile:${symbol}:${days}`;
-  const cached = getCached<CompanyProfile>(cacheKey);
-  if (cached) return cached;
+
+  // Skip cache if fresh requested or live mode enabled
+  if (!fresh && !liveModeEnabled) {
+    const cached = getCached<CompanyProfile>(cacheKey);
+    if (cached) return cached;
+  }
 
   try {
     // Fetch comprehensive data using quoteSummary
@@ -293,7 +332,8 @@ export async function getCompanyProfile(
       historicalData: historicalDataWithDates,
     };
 
-    setCache(cacheKey, companyProfile, CACHE_TTL.quote * 2); // Cache longer for profiles
+    // 10 second cache for profiles (same as quotes for consistency)
+    setCache(cacheKey, companyProfile, 10_000);
     return companyProfile;
   } catch {
     return null;
@@ -745,7 +785,7 @@ export async function getMarketOverview(): Promise<MarketOverview> {
       asOfDate: new Date(),
     };
 
-    setCache(cacheKey, overview, CACHE_TTL.quote);
+    setCache(cacheKey, overview, CACHE_TTL.marketOverview);
     return overview;
   } catch (error) {
     // Return empty overview on error
@@ -912,7 +952,7 @@ export async function getNewsFeed(symbols?: string[]): Promise<NewsArticle[]> {
     // Limit to 15 articles
     const limited = articles.slice(0, 15);
 
-    setCache(cacheKey, limited, CACHE_TTL.quote);
+    setCache(cacheKey, limited, CACHE_TTL.news);
     return limited;
   } catch {
     return [];
@@ -1259,7 +1299,7 @@ export async function getMarketBriefData(): Promise<MarketBriefData> {
       upcomingEarnings: upcomingEarnings.slice(0, 6),
     };
 
-    setCache(cacheKey, briefData, CACHE_TTL.quote);
+    setCache(cacheKey, briefData, CACHE_TTL.marketOverview);
     return briefData;
   } catch (error) {
     // Return minimal data on error

@@ -1,11 +1,15 @@
 // Timing constants (in milliseconds)
-export const REFRESH_INTERVAL_MS = 30_000; // 30 seconds
+export const REFRESH_INTERVAL_MS = 10_000; // 10 seconds for live mode
+export const LIVE_MODE_INTERVAL_MS = 10_000; // 10 seconds
 
 // Cache TTL values
+// Strategy: Short cache for price data, longer for static data
 export const CACHE_TTL = {
-  quote: 30_000,        // 30 seconds
-  historical: 300_000,  // 5 minutes
-  fundamentals: 3600_000, // 1 hour
+  quote: 10_000,          // 10 seconds - price data changes frequently
+  marketOverview: 15_000, // 15 seconds - indices/sectors
+  historical: 300_000,    // 5 minutes - intraday history doesn't change much
+  fundamentals: 3600_000, // 1 hour - financials rarely change
+  news: 60_000,           // 1 minute - news feed
 } as const;
 
 // Demo data for first-time users

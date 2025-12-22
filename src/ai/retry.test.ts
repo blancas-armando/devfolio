@@ -61,7 +61,8 @@ describe('withRetry', () => {
       await vi.runAllTimersAsync();
       await vi.waitFor(() => expect(caughtError).not.toBeNull());
 
-      expect(caughtError?.message).toBe('rate limit');
+      expect(caughtError).not.toBeNull();
+      expect(caughtError!.message).toBe('rate limit');
       expect(fn).toHaveBeenCalledTimes(2);
     });
 
@@ -78,7 +79,8 @@ describe('withRetry', () => {
       await vi.runAllTimersAsync();
       await vi.waitFor(() => expect(caughtError).not.toBeNull());
 
-      expect(caughtError?.message).toBe('401 unauthorized');
+      expect(caughtError).not.toBeNull();
+      expect(caughtError!.message).toBe('401 unauthorized');
       expect(fn).toHaveBeenCalledTimes(1);
     });
 
@@ -95,7 +97,8 @@ describe('withRetry', () => {
       await vi.runAllTimersAsync();
       await vi.waitFor(() => expect(caughtError).not.toBeNull());
 
-      expect(caughtError?.message).toBe('400 bad request');
+      expect(caughtError).not.toBeNull();
+      expect(caughtError!.message).toBe('400 bad request');
       expect(fn).toHaveBeenCalledTimes(1);
     });
 
@@ -164,7 +167,8 @@ describe('withRetry', () => {
       await vi.runAllTimersAsync();
       await vi.waitFor(() => expect(caughtError).not.toBeNull());
 
-      expect(caughtError?.message).toBe('rate limit');
+      expect(caughtError).not.toBeNull();
+      expect(caughtError!.message).toBe('rate limit');
       expect(fn).toHaveBeenCalledTimes(1);
     });
 
@@ -188,8 +192,9 @@ describe('withRetry', () => {
       await vi.runAllTimersAsync();
       await vi.waitFor(() => expect(caughtError).not.toBeNull());
 
+      expect(caughtError).not.toBeNull();
       expect(caughtError).toBeInstanceOf(CustomError);
-      expect(caughtError?.code).toBe('ERR_001');
+      expect(caughtError!.code).toBe('ERR_001');
     });
   });
 });
