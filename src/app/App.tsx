@@ -37,6 +37,7 @@ import { HistoryView } from '../views/research/HistoryView.js';
 import { ETFProfileView } from '../views/etf/ETFProfile.js';
 import { ETFComparisonView } from '../views/etf/ETFComparison.js';
 import { LiveModeView } from '../views/market/LiveMode.js';
+import { StatsView } from '../views/debug/StatsView.js';
 
 // Data Services
 import { getMarketBrief } from '../services/brief.js';
@@ -656,6 +657,15 @@ async function routeCommand(command: string, dispatch: React.Dispatch<any>): Pro
     dispatch({
       type: 'APPEND_OUTPUT',
       block: createComponentBlock(<LiveModeView symbols={symbols} />),
+    });
+    return;
+  }
+
+  // Stats command (debug screen)
+  if (cmd === 'stats' || cmd === '::debug' || cmd === '::stats') {
+    dispatch({
+      type: 'APPEND_OUTPUT',
+      block: createComponentBlock(<StatsView />),
     });
     return;
   }
