@@ -63,7 +63,7 @@ export function WelcomeScreen({
               Ask anything about markets in natural language
             </TipItem>
             <TipItem number={4}>
-              <Cmd>/help</Cmd> for all commands
+              <Cmd>help</Cmd> for all commands
             </TipItem>
           </InkBox>
         </InkBox>
