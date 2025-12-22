@@ -527,6 +527,155 @@ async function routeCommand(command: string, dispatch: React.Dispatch<any>): Pro
     return;
   }
 
+  // Options command
+  if (cmd === 'options' || cmd === 'chain') {
+    const symbol = parts[1]?.toUpperCase();
+    if (symbol) {
+      dispatch({
+        type: 'APPEND_OUTPUT',
+        block: createTextBlock(
+          `Options for ${symbol}\n` +
+          '─'.repeat(40) + '\n\n' +
+          'Options data is available. Use the CLI version for full options chain display.\n' +
+          'Run: npm run cli\n\n' +
+          'Commands:\n' +
+          `  options ${symbol}           Options overview\n` +
+          `  chain ${symbol} [expiry]    Full chain with Greeks`,
+          'info'
+        ),
+      });
+    } else {
+      dispatch({ type: 'APPEND_OUTPUT', block: createErrorBlock('Missing symbol', ['Usage: options AAPL']) });
+    }
+    return;
+  }
+
+  // Crypto command
+  if (cmd === 'crypto' || cmd === 'c') {
+    const symbol = parts[1]?.toUpperCase();
+    dispatch({
+      type: 'APPEND_OUTPUT',
+      block: createTextBlock(
+        'Cryptocurrency\n' +
+        '─'.repeat(40) + '\n\n' +
+        'Crypto data is available via CoinGecko (free, no API key).\n' +
+        'Use the CLI version for full crypto display.\n' +
+        'Run: npm run cli\n\n' +
+        'Commands:\n' +
+        '  crypto        Top 50 cryptocurrencies\n' +
+        '  c BTC         Bitcoin profile\n' +
+        '  c ETH         Ethereum profile',
+        'info'
+      ),
+    });
+    return;
+  }
+
+  // Alerts command
+  if (cmd === 'alerts') {
+    dispatch({
+      type: 'APPEND_OUTPUT',
+      block: createTextBlock(
+        'Alerts System\n' +
+        '─'.repeat(40) + '\n\n' +
+        'The alert system monitors for:\n' +
+        '  - Price drops (>5%)\n' +
+        '  - Price spikes (>8%)\n' +
+        '  - Upcoming earnings (3 days)\n' +
+        '  - Watchlist events\n\n' +
+        'Alerts run automatically in the background.\n' +
+        'Use the CLI version for alert management.\n' +
+        'Run: npm run cli',
+        'info'
+      ),
+    });
+    return;
+  }
+
+  // Live mode command
+  if (cmd === 'live') {
+    dispatch({
+      type: 'APPEND_OUTPUT',
+      block: createTextBlock(
+        'Live Mode\n' +
+        '─'.repeat(40) + '\n\n' +
+        'Live mode provides 10-second quote refresh.\n' +
+        'Use the CLI version for live mode.\n' +
+        'Run: npm run cli\n\n' +
+        'Commands:\n' +
+        '  live              Toggle live mode for watchlist\n' +
+        '  live AAPL NVDA    Live mode for specific symbols',
+        'info'
+      ),
+    });
+    return;
+  }
+
+  // Cost command
+  if (cmd === 'cost') {
+    dispatch({
+      type: 'APPEND_OUTPUT',
+      block: createTextBlock(
+        'AI Cost Tracking\n' +
+        '─'.repeat(40) + '\n\n' +
+        'Cost tracking monitors AI token usage.\n' +
+        'Use the CLI version for detailed cost breakdown.\n' +
+        'Run: npm run cli',
+        'info'
+      ),
+    });
+    return;
+  }
+
+  // Config command
+  if (cmd === 'config') {
+    dispatch({
+      type: 'APPEND_OUTPUT',
+      block: createTextBlock(
+        'AI Configuration\n' +
+        '─'.repeat(40) + '\n\n' +
+        'Configure AI providers and features.\n' +
+        'Use the CLI version for configuration.\n' +
+        'Run: npm run cli\n\n' +
+        'Supported providers:\n' +
+        '  - Groq (free tier, fastest)\n' +
+        '  - OpenAI (GPT-4o)\n' +
+        '  - Anthropic (Claude)\n' +
+        '  - Ollama (local)',
+        'info'
+      ),
+    });
+    return;
+  }
+
+  // Tutorial command
+  if (cmd === 'tutorial') {
+    dispatch({
+      type: 'APPEND_OUTPUT',
+      block: createTextBlock(
+        'Interactive Tutorial\n' +
+        '====================\n\n' +
+        'Welcome to DevFolio! Here are the key commands to get started:\n\n' +
+        '  1. Watchlist (w)        - Track your favorite stocks\n' +
+        '  2. Stock Profile (s)    - Get detailed stock info: s AAPL\n' +
+        '  3. Options (options)    - View options chains: options AAPL\n' +
+        '  4. Crypto (crypto)      - Top 50 cryptocurrencies\n' +
+        '  5. AI Chat              - Just type naturally!\n' +
+        '  6. Alerts (alerts)      - View price alerts\n\n' +
+        'More commands:\n' +
+        '  b, brief      AI market analysis\n' +
+        '  r AAPL        Research report\n' +
+        '  cs AAPL MSFT  Compare stocks\n' +
+        '  fin AAPL      Financial statements\n' +
+        '  live          10-second quote refresh\n' +
+        '  help          See all commands\n\n' +
+        'Try: s AAPL to see a stock profile!',
+        'info'
+      ),
+    });
+    return;
+  }
+
   // General query - send to AI agent
   try {
     const response = await chat(command);
