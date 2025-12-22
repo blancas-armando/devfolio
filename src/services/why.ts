@@ -5,6 +5,7 @@
 
 import { complete } from '../ai/client.js';
 import { extractJson } from '../ai/json.js';
+import { buildWhyPrompt } from '../ai/promptLibrary.js';
 import { getCompanyProfile, getNewsFeed, type NewsArticle } from './market.js';
 
 export interface WhyExplanation {
@@ -47,30 +48,19 @@ export async function explainMovement(symbol: string): Promise<WhyExplanation | 
   const recentNews = news.slice(0, 5);
   const newsContext = recentNews.map((n: NewsArticle) => `- ${n.title} (${n.publisher})`).join('\n');
 
-  const direction = profile.changePercent >= 0 ? 'up' : 'down';
-  const magnitude = Math.abs(profile.changePercent);
-  const moveDesc = magnitude < 1 ? 'slightly' : magnitude < 3 ? 'moderately' : 'significantly';
-
-  const prompt = `You are a stock market analyst. ${profile.symbol} (${profile.name}) is ${direction} ${moveDesc} today (${profile.changePercent >= 0 ? '+' : ''}${profile.changePercent.toFixed(2)}%).
-
-Stock data:
-- Current price: $${profile.price.toFixed(2)}
+  // Format stock data for prompt
+  const stockData = `- Current price: $${profile.price.toFixed(2)}
 - Sector: ${profile.sector}
 - Market Cap: $${((profile.marketCap ?? 0) / 1e9).toFixed(1)}B
-- YTD Return: ${profile.ytdReturn !== null ? `${profile.ytdReturn >= 0 ? '+' : ''}${profile.ytdReturn.toFixed(1)}%` : 'N/A'}
+- YTD Return: ${profile.ytdReturn !== null ? `${profile.ytdReturn >= 0 ? '+' : ''}${profile.ytdReturn.toFixed(1)}%` : 'N/A'}`;
 
-Recent news:
-${newsContext || 'No recent news available'}
-
-Explain why this stock might be moving. Respond in JSON:
-{
-  "headline": "One-line summary (max 60 chars)",
-  "explanation": "2-3 sentences explaining the movement",
-  "factors": ["factor1", "factor2", "factor3"] (3 key factors, each max 40 chars),
-  "newsContext": ["relevant headline 1", "relevant headline 2"] (1-2 most relevant news items if any)
-}
-
-Be specific. If news doesn't explain it, mention broader market or sector factors.`;
+  const prompt = buildWhyPrompt(
+    profile.symbol,
+    profile.name,
+    profile.changePercent,
+    stockData,
+    newsContext
+  );
 
   try {
     const response = await complete(

@@ -5,6 +5,7 @@
 
 import { complete } from '../ai/client.js';
 import { extractJson } from '../ai/json.js';
+import { buildSentimentPrompt } from '../ai/promptLibrary.js';
 import { getNewsFeed, type NewsArticle } from './market.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -65,30 +66,10 @@ export async function analyzeNewsSentiment(symbols?: string[]): Promise<NewsSent
   ).join('\n');
 
   const context = symbols && symbols.length > 0
-    ? `for ${symbols.join(', ')}`
-    : 'for the general market';
+    ? `Analyzing sentiment for ${symbols.join(', ')}`
+    : 'Analyzing general market sentiment';
 
-  const prompt = `You are a financial news analyst. Analyze the sentiment of these recent headlines ${context}.
-
-RECENT NEWS:
-${newsData}
-
-Provide sentiment analysis in JSON format:
-{
-  "overallSentiment": "very_bullish" or "bullish" or "neutral" or "bearish" or "very_bearish",
-  "sentimentScore": -100 to +100 (negative = bearish, positive = bullish),
-  "dominantThemes": ["theme1", "theme2", "theme3"] (3 key themes),
-  "summary": "1-2 sentences summarizing the news sentiment",
-  "topBullish": "Most positive headline" or null,
-  "topBearish": "Most concerning headline" or null,
-  "marketMood": "Brief 2-3 word mood descriptor (e.g., 'cautiously optimistic', 'risk-off', 'bullish momentum')"
-}
-
-Consider:
-- Headline tone and language
-- Market implications
-- Sector/company specific vs broad market news
-- Recent trends vs one-off events`;
+  const prompt = buildSentimentPrompt(newsData, context);
 
   try {
     const response = await complete(

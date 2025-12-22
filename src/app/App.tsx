@@ -82,7 +82,7 @@ import { getPortfolio } from '../db/portfolio.js';
 import { getPulseConfig, updatePulseConfig } from '../db/config.js';
 import { getAllPreferences, deletePreference, clearAllPreferences } from '../db/preferences.js';
 import { getRecentMessages, searchMessages, getAllSessions, getAllTrackedSymbols } from '../db/memory.js';
-import { findSimilarCommands, KNOWN_COMMANDS } from '../utils/fuzzy.js';
+import { findSimilarCommands, KNOWN_COMMANDS, isNaturalLanguageInput } from '../utils/fuzzy.js';
 
 // Command parsers (still needed)
 import {
@@ -1229,18 +1229,22 @@ async function routeCommand(command: string, dispatch: React.Dispatch<any>): Pro
     return;
   }
 
-  // Check for similar commands before falling back to AI
-  const suggestions = findSimilarCommands(cmd, KNOWN_COMMANDS, 2);
-  if (suggestions.length > 0) {
-    dispatch({
-      type: 'APPEND_OUTPUT',
-      block: createTextBlock(
-        `Unknown command "${cmd}". Did you mean: ${suggestions.join(', ')}?\n` +
-        `Or type your question in natural language for AI assistance.`,
-        'warning'
-      ),
-    });
-    return;
+  // Check if this looks like natural language before suggesting commands
+  // This prevents "why is tech up?" from being treated as a typo of "why" command
+  if (!isNaturalLanguageInput(originalCommand)) {
+    // Check for similar commands before falling back to AI
+    const suggestions = findSimilarCommands(cmd, KNOWN_COMMANDS, 2);
+    if (suggestions.length > 0) {
+      dispatch({
+        type: 'APPEND_OUTPUT',
+        block: createTextBlock(
+          `Unknown command "${cmd}". Did you mean: ${suggestions.join(', ')}?\n` +
+          `Or type your question in natural language for AI assistance.`,
+          'warning'
+        ),
+      });
+      return;
+    }
   }
 
   // General query - send to AI agent

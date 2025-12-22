@@ -63,6 +63,53 @@ export function findSimilarCommands(
 }
 
 /**
+ * Check if input looks like a natural language question rather than a command.
+ * Returns true if the input should be sent to AI instead of showing "Unknown command".
+ */
+export function isNaturalLanguageInput(input: string): boolean {
+  const parts = input.trim().toLowerCase().split(/\s+/);
+
+  // Single word inputs are likely commands or typos
+  if (parts.length === 1) return false;
+
+  // Question words that indicate natural language
+  const questionWords = [
+    'is', 'are', 'was', 'were', 'what', 'how', 'does', 'do', 'did',
+    'can', 'could', 'will', 'would', 'should', 'tell', 'explain',
+    'give', 'show', 'describe', 'list', 'find', 'search', 'look',
+    'analyze', 'analyse', 'summarize', 'summarise', 'when', 'where',
+    'which', 'who', 'whose', 'whom'
+  ];
+
+  // If first word is a question word (not also a command), it's natural language
+  const firstWord = parts[0];
+  if (questionWords.includes(firstWord) && !KNOWN_COMMANDS.includes(firstWord)) {
+    return true;
+  }
+
+  // Long inputs (4+ words) are likely natural language
+  if (parts.length >= 4) return true;
+
+  // "why" followed by something other than a stock symbol is natural language
+  // e.g., "why is tech up" vs "why AAPL"
+  if (firstWord === 'why' && parts.length > 1) {
+    const secondWord = parts[1];
+    // Stock symbols are 1-5 uppercase letters, but user typed lowercase
+    // If second word is longer than 5 chars or contains non-letters, it's natural language
+    if (secondWord.length > 5 || !/^[a-z]+$/.test(secondWord)) {
+      return true;
+    }
+    // Common words that indicate natural language after "why"
+    const nlIndicators = ['is', 'are', 'was', 'were', 'did', 'does', 'do', 'the', 'my', 'has', 'have'];
+    if (nlIndicators.includes(secondWord)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * All known commands for fuzzy matching
  */
 export const KNOWN_COMMANDS = [

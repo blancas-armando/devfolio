@@ -67,8 +67,24 @@ export function WatchlistView({ quotes, calendar }: WatchlistViewProps): React.R
   const upcomingDividends = calendar?.dividends.slice(0, 2) ?? [];
   const hasEvents = upcomingEarnings.length > 0 || upcomingDividends.length > 0;
 
+  // Check if any quotes are from offline cache
+  const hasStaleData = quotes.some(q => q.isStale);
+  const oldestCache = quotes
+    .filter(q => q.cachedAt)
+    .map(q => q.cachedAt!)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+
   return (
     <Panel width={60} title="Watchlist">
+      {/* Offline/stale data warning */}
+      {hasStaleData && oldestCache && (
+        <PanelRow>
+          <Text color={semantic.warning}>
+            {symbols.warning} Showing cached data from {oldestCache.toLocaleString()}
+          </Text>
+        </PanelRow>
+      )}
+
       {/* Column headers */}
       <PanelRow>
         <InkBox width={10}>

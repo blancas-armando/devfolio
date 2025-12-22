@@ -5,6 +5,7 @@
 
 import { complete } from '../ai/client.js';
 import { extractJson } from '../ai/json.js';
+import { buildWatchlistPrompt } from '../ai/promptLibrary.js';
 import { getWatchlist } from '../db/watchlist.js';
 import { getQuotes } from './market.js';
 import type { Quote } from '../types/index.js';
@@ -81,35 +82,7 @@ export async function curateWatchlist(): Promise<WatchlistCuration | null> {
     return `${symbol}: $${quote.price.toFixed(2)} (${quote.changePercent >= 0 ? '+' : ''}${quote.changePercent.toFixed(2)}% today)`;
   }).join('\n');
 
-  const prompt = `You are a stock analyst curating a watchlist. Analyze these stocks and provide insights.
-
-WATCHLIST:
-${stocksData}
-
-Provide curation in JSON format:
-{
-  "summary": "1 sentence overall watchlist assessment",
-  "marketContext": "1 sentence on current market conditions affecting these stocks",
-  "items": [
-    {
-      "symbol": "AAPL",
-      "signal": "hot" or "caution" or "neutral" or "watch",
-      "reason": "Brief reason (max 50 chars)"
-    }
-  ],
-  "topPick": "SYMBOL" or null (best opportunity right now),
-  "topPickReason": "Why this is the top pick" or null,
-  "removeCandidate": "SYMBOL" or null (consider removing),
-  "removeCandidateReason": "Why consider removing" or null
-}
-
-Signal meanings:
-- hot: Strong momentum, positive catalysts
-- caution: Red flags, concerning signals
-- neutral: Stable, no immediate action needed
-- watch: Interesting setup, monitor closely
-
-Be specific and actionable.`;
+  const prompt = buildWatchlistPrompt(stocksData);
 
   try {
     const response = await complete(

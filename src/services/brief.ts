@@ -5,6 +5,7 @@
 
 import { complete } from '../ai/client.js';
 import { extractJson } from '../ai/json.js';
+import { buildMarketBriefPrompt } from '../ai/promptLibrary.js';
 import { getMarketBriefData, type MarketBriefData } from './market.js';
 
 export interface MarketNarrative {
@@ -104,20 +105,8 @@ function isMarketNarrative(obj: unknown): obj is MarketNarrative {
 
 async function generateNarrative(data: MarketBriefData): Promise<MarketNarrative | null> {
   try {
-    const prompt = `You are a professional market analyst. Based on the following market data, provide a brief but insightful market analysis.
-
-${formatDataForAI(data)}
-
-Respond in JSON format with these fields:
-{
-  "headline": "A single compelling headline summarizing today's market action (10-15 words)",
-  "summary": "2-3 sentences explaining the key story of the day - what happened and why it matters",
-  "sectorAnalysis": "1-2 sentences on sector rotation and what it signals",
-  "keyThemes": ["theme1", "theme2", "theme3"] (3 key themes driving markets today),
-  "outlook": "1-2 sentences on what to watch going forward"
-}
-
-Be specific, reference actual data points. No generic platitudes. Write like a Bloomberg terminal summary - concise and actionable.`;
+    const marketData = formatDataForAI(data);
+    const prompt = buildMarketBriefPrompt(marketData);
 
     const response = await complete(
       {

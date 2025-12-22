@@ -149,6 +149,17 @@ export function initializeSchema(db: Database.Database) {
       last_used_at DATETIME,
       fail_count INTEGER DEFAULT 0
     );
+
+    -- ═══════════════════════════════════════════════════════════════════════════
+    -- Quote Cache (for offline viewing)
+    -- ═══════════════════════════════════════════════════════════════════════════
+
+    CREATE TABLE IF NOT EXISTS quote_cache (
+      symbol TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_quote_cache_cached ON quote_cache(cached_at DESC);
   `);
 
   // Create FTS5 virtual table for full-text search (fallback for non-OpenAI users)

@@ -5,6 +5,7 @@
 
 import { complete, isAIAvailable } from '../ai/client.js';
 import { extractJson } from '../ai/json.js';
+import { buildQuickTakePrompt } from '../ai/promptLibrary.js';
 import type { CompanyProfile } from './market.js';
 
 export interface QuickTake {
@@ -68,19 +69,7 @@ export async function getQuickTake(profile: CompanyProfile): Promise<QuickTake |
 
   try {
     const data = formatProfileForAI(profile);
-
-    const prompt = `You are a concise equity analyst. Given this stock data, provide a quick take in JSON format.
-
-${data}
-
-Respond with ONLY this JSON (no other text):
-{
-  "sentiment": "bullish" or "bearish" or "neutral",
-  "summary": "1 sentence (max 80 chars) summarizing the investment case",
-  "keyPoint": "1 key metric or factor to watch (max 50 chars)"
-}
-
-Be specific and use actual numbers. No generic statements.`;
+    const prompt = buildQuickTakePrompt(data);
 
     const response = await complete(
       {

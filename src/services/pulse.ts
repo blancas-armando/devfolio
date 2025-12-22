@@ -5,6 +5,7 @@
 
 import YahooFinance from 'yahoo-finance2';
 import { complete, isAIAvailable } from '../ai/client.js';
+import { MARKET_PULSE_PROMPT } from '../ai/promptLibrary.js';
 import {
   getMarketOverview,
   getNewsFeed,
@@ -211,12 +212,7 @@ function formatPulseDataForAI(pulse: Omit<MarketPulse, 'aiTake'>): string {
   return lines.join('\n');
 }
 
-const PULSE_PROMPT = `You are a concise market analyst. Given the current market state, provide a 1-2 sentence "AI Take" that:
-- Identifies the dominant market theme or narrative driving today's action
-- Notes any concerning signals or opportunities
-- Uses plain language a developer/casual investor would understand
-
-Be direct and opinionated. No hedging or "it depends." Start with the most important insight.`;
+// Using MARKET_PULSE_PROMPT from promptLibrary.js
 
 async function generateAITake(pulse: Omit<MarketPulse, 'aiTake'>): Promise<string | null> {
   if (!isAIAvailable()) {
@@ -229,7 +225,7 @@ async function generateAITake(pulse: Omit<MarketPulse, 'aiTake'>): Promise<strin
     const response = await complete(
       {
         messages: [
-          { role: 'system', content: PULSE_PROMPT },
+          { role: 'system', content: MARKET_PULSE_PROMPT },
           { role: 'user', content: marketData },
         ],
         maxTokens: 100,

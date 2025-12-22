@@ -1,6 +1,7 @@
 import YahooFinance from 'yahoo-finance2';
 import { complete } from '../ai/client.js';
 import { extractJson } from '../ai/json.js';
+import { buildResearchPrompt } from '../ai/promptLibrary.js';
 import { getCompanyProfile, type CompanyProfile } from './market.js';
 
 // Initialize Yahoo Finance client
@@ -319,33 +320,7 @@ export async function generateResearchReport(symbol: string): Promise<ResearchRe
   if (!data) return null;
 
   const dataContext = formatDataForPrompt(data);
-
-  const prompt = `You are a senior equity research analyst. Based on the following company data, generate a comprehensive research primer.
-
-${dataContext}
-
-Generate a research report with the following sections. Be specific, use numbers from the data, and provide actionable insights. Keep each section concise but informative.
-
-Respond in this exact JSON format:
-{
-  "executiveSummary": "2-3 sentence overview of the investment thesis",
-  "businessOverview": "What the company does, its market position, and business model",
-  "keySegments": ["segment1: description", "segment2: description", "segment3: description"],
-  "competitivePosition": "Competitive advantages (moats), market share, key competitors",
-  "financialHighlights": "Key financial metrics, trends, and what they indicate",
-  "catalysts": ["catalyst1", "catalyst2", "catalyst3"],
-  "risks": ["risk1", "risk2", "risk3"],
-  "bullCase": "Why the stock could outperform",
-  "bearCase": "Why the stock could underperform",
-  "conclusion": "Overall assessment and key takeaways"
-}
-
-Important:
-- Use specific numbers and percentages from the data
-- Be objective and balanced
-- Keep each section to 2-4 sentences max
-- For keySegments, catalysts, and risks, provide exactly 3 items each
-- Base your analysis on the actual data provided, don't make up numbers`;
+  const prompt = buildResearchPrompt(dataContext);
 
   try {
     const response = await complete(

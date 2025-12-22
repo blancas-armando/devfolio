@@ -11,6 +11,7 @@ import {
   getRateLimitStatus,
   shouldThrottle,
 } from './ratelimit.js';
+import { cacheQuote, cacheQuotes, getCachedQuote, getCachedQuotes, type CachedQuote } from '../db/quoteCache.js';
 
 // Initialize Yahoo Finance client with notices suppressed
 const yahooFinance = new YahooFinance({
@@ -199,10 +200,19 @@ export async function getQuote(
       low52w: result.fiftyTwoWeekLow,
     };
 
-    // Shorter cache for quotes - 10 seconds
+    // Shorter cache for quotes - 10 seconds (in-memory)
     setCache(cacheKey, quote, 10_000);
+
+    // Also persist to database for offline viewing
+    cacheQuote(quote);
+
     return quote;
   } catch {
+    // Try persistent cache fallback for offline viewing
+    const persistentCached = getCachedQuote(symbol);
+    if (persistentCached) {
+      return persistentCached;
+    }
     return null;
   }
 }
@@ -263,14 +273,26 @@ export async function getQuotes(
         low52w: result.fiftyTwoWeekLow,
       };
 
-      // Cache individual quotes
+      // Cache individual quotes (in-memory)
       setCache(`quote:${quote.symbol}`, quote, 10_000);
       freshQuotes.push(quote);
     }
 
+    // Persist all fresh quotes to database for offline viewing
+    if (freshQuotes.length > 0) {
+      cacheQuotes(freshQuotes);
+    }
+
     return [...cached, ...freshQuotes];
   } catch {
-    return cached; // Return cached quotes on error
+    // Fallback to persistent cache for offline viewing
+    if (cached.length === 0) {
+      const persistentCached = getCachedQuotes(symbols);
+      if (persistentCached.length > 0) {
+        return persistentCached;
+      }
+    }
+    return cached; // Return in-memory cached quotes on error
   }
 }
 

@@ -6,6 +6,7 @@
 import YahooFinance from 'yahoo-finance2';
 import { complete } from '../ai/client.js';
 import { extractJson } from '../ai/json.js';
+import { buildEarningsPrompt } from '../ai/promptLibrary.js';
 import {
   getRecentFilings,
   getFilingText,
@@ -367,9 +368,8 @@ async function generateEarningsAnalysis(
   kpis: KPIMetric[];
   guidance: GuidanceMetric[];
 }> {
-  const prompt = `You are a senior equity analyst. Analyze earnings data for ${companyName} (${symbol}).
-
-COMPANY PROFILE:
+  // Format earnings data for prompt
+  const earningsData = `COMPANY PROFILE:
 ${profile ? `
 - Price: $${profile.price.toFixed(2)} (${profile.changePercent >= 0 ? '+' : ''}${profile.changePercent.toFixed(2)}%)
 - Market Cap: $${profile.marketCap ? (profile.marketCap / 1e9).toFixed(2) : 'N/A'}B
@@ -398,29 +398,9 @@ FORWARD ESTIMATES:
 SEC FILINGS:
 ${filings.slice(0, 5).map(f => `- ${f.form} (${f.filingDate}): ${f.description}`).join('\n')}
 
-${keySections.length > 0 ? `FILING EXCERPTS:\n${keySections.map(s => `${s.title}: ${s.content.substring(0, 300)}...`).join('\n')}` : ''}
+${keySections.length > 0 ? `FILING EXCERPTS:\n${keySections.map(s => `${s.title}: ${s.content.substring(0, 300)}...`).join('\n')}` : ''}`;
 
-Provide analysis in this exact JSON format:
-{
-  "earningsSummary": "2-3 sentence summary of earnings performance",
-  "performanceTrend": "Analysis of trajectory with specific numbers",
-  "guidanceAnalysis": "What estimates suggest about future performance",
-  "keyTakeaways": ["takeaway1", "takeaway2", "takeaway3"],
-  "outlook": "2-3 sentence outlook for upcoming earnings",
-  "kpis": [
-    {"name": "Gross Margin", "actual": 45.2, "consensus": 44.8, "diff": 0.9, "comment": "Beat", "unit": "%"},
-    {"name": "Free Cash Flow", "actual": 25.1, "consensus": 24.0, "diff": 4.6, "comment": "Beat", "unit": "$B"}
-  ],
-  "guidance": [
-    {"metric": "FY Revenue", "current": 400, "guidance": 410, "priorGuidance": 405, "change": "Raised", "unit": "$B"},
-    {"metric": "FY Operating Margin", "current": 32.5, "guidance": 33.0, "priorGuidance": 32.5, "change": "Maintained", "unit": "%"},
-    {"metric": "FY EPS", "current": 6.50, "guidance": 6.80, "priorGuidance": 6.70, "change": "Raised", "unit": "$"}
-  ]
-}
-
-For KPIs, include 3-5 relevant metrics based on the company's sector.
-For guidance, include Rev, OP, OPM, EPS and any other relevant metrics.
-Use actual numbers from the data. If not available, use reasonable estimates based on sector.`;
+  const prompt = buildEarningsPrompt(symbol, companyName, earningsData);
 
   try {
     const response = await complete(

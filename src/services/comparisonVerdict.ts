@@ -5,6 +5,7 @@
 
 import { complete } from '../ai/client.js';
 import { extractJson } from '../ai/json.js';
+import { buildStockComparisonPrompt, buildETFComparisonPrompt } from '../ai/promptLibrary.js';
 import { getCompanyProfile, type CompanyProfile } from './market.js';
 import { getETFProfile } from './etf.js';
 import type { ETFProfile, ETFHolding } from '../types/index.js';
@@ -81,33 +82,7 @@ export async function getStockComparisonVerdict(symbols: string[]): Promise<Comp
   if (validProfiles.length < 2) return null;
 
   const stocksData = validProfiles.map(formatStockForComparison).join('\n\n');
-
-  const prompt = `You are an equity analyst comparing stocks. Determine a winner and provide insights.
-
-STOCKS TO COMPARE:
-${stocksData}
-
-Provide verdict in JSON format:
-{
-  "winner": "SYMBOL",
-  "winnerReason": "1-2 sentences why this stock wins overall",
-  "confidence": "high" or "medium" or "low",
-  "categoryWinners": [
-    {"category": "Valuation", "winner": "SYMBOL", "reason": "Brief reason"},
-    {"category": "Growth", "winner": "SYMBOL", "reason": "Brief reason"},
-    {"category": "Profitability", "winner": "SYMBOL", "reason": "Brief reason"},
-    {"category": "Momentum", "winner": "SYMBOL", "reason": "Brief reason"}
-  ],
-  "tradeoffs": "1 sentence on key tradeoff between these stocks",
-  "recommendation": "Specific actionable recommendation",
-  "bestFor": {
-    "growth investor": "SYMBOL",
-    "value investor": "SYMBOL",
-    "income investor": "SYMBOL"
-  }
-}
-
-Be specific with numbers. No hedging.`;
+  const prompt = buildStockComparisonPrompt(stocksData);
 
   try {
     const response = await complete(
@@ -171,33 +146,7 @@ export async function getETFComparisonVerdict(symbols: string[]): Promise<Compar
   if (validProfiles.length < 2) return null;
 
   const etfsData = validProfiles.map(formatETFForComparison).join('\n\n');
-
-  const prompt = `You are an ETF analyst comparing funds. Determine a winner and provide insights.
-
-ETFS TO COMPARE:
-${etfsData}
-
-Provide verdict in JSON format:
-{
-  "winner": "SYMBOL",
-  "winnerReason": "1-2 sentences why this ETF wins overall",
-  "confidence": "high" or "medium" or "low",
-  "categoryWinners": [
-    {"category": "Cost", "winner": "SYMBOL", "reason": "Brief reason"},
-    {"category": "Performance", "winner": "SYMBOL", "reason": "Brief reason"},
-    {"category": "Diversification", "winner": "SYMBOL", "reason": "Brief reason"},
-    {"category": "Yield", "winner": "SYMBOL", "reason": "Brief reason"}
-  ],
-  "tradeoffs": "1 sentence on key tradeoff between these ETFs",
-  "recommendation": "Specific actionable recommendation",
-  "bestFor": {
-    "long-term investor": "SYMBOL",
-    "cost-conscious": "SYMBOL",
-    "income seeker": "SYMBOL"
-  }
-}
-
-Focus on practical differences that matter. Be specific.`;
+  const prompt = buildETFComparisonPrompt(etfsData);
 
   try {
     const response = await complete(

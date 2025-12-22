@@ -5,11 +5,32 @@ import { getPortfolio, addHolding } from '../db/portfolio.js';
 import { getQuote, compareStocks } from '../services/market.js';
 import { getETFProfile, compareETFs } from '../services/etf.js';
 import { getRecentFilings } from '../services/sec.js';
+import { validateToolArgs, isValidToolName, type ToolArgs } from './schemas.js';
 
 export async function executeTool(
   name: ToolName,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
+  // Validate tool name
+  if (!isValidToolName(name)) {
+    return {
+      name,
+      result: { error: `Unknown tool: ${name}` },
+    };
+  }
+
+  // Validate arguments with Zod
+  const validation = validateToolArgs(name, args);
+  if (!validation.success) {
+    return {
+      name,
+      result: { error: validation.error },
+    };
+  }
+
+  // Use validated args
+  const validatedArgs = validation.data;
+
   switch (name) {
     case 'show_dashboard': {
       const watchlist = getWatchlist();
@@ -22,7 +43,7 @@ export async function executeTool(
     }
 
     case 'add_to_watchlist': {
-      const symbols = args.symbols as string[];
+      const { symbols } = validatedArgs as ToolArgs<'add_to_watchlist'>;
       const added = addToWatchlist(symbols);
       return {
         name,
@@ -32,7 +53,7 @@ export async function executeTool(
     }
 
     case 'remove_from_watchlist': {
-      const symbols = args.symbols as string[];
+      const { symbols } = validatedArgs as ToolArgs<'remove_from_watchlist'>;
       const removed = removeFromWatchlist(symbols);
       return {
         name,
@@ -42,7 +63,7 @@ export async function executeTool(
     }
 
     case 'lookup_stock': {
-      const symbol = args.symbol as string;
+      const { symbol } = validatedArgs as ToolArgs<'lookup_stock'>;
       const quote = await getQuote(symbol);
       return {
         name,
@@ -52,10 +73,8 @@ export async function executeTool(
     }
 
     case 'add_holding': {
-      const symbol = args.symbol as string;
-      const shares = args.shares as number;
-      const costBasis = args.cost_basis as number;
-      const holding = addHolding(symbol, shares, costBasis);
+      const { symbol, shares, cost_basis } = validatedArgs as ToolArgs<'add_holding'>;
+      const holding = addHolding(symbol, shares, cost_basis);
       const portfolio = await getPortfolio();
       return {
         name,
@@ -83,7 +102,7 @@ export async function executeTool(
     }
 
     case 'lookup_etf': {
-      const symbol = (args.symbol as string).toUpperCase();
+      const { symbol } = validatedArgs as ToolArgs<'lookup_etf'>;
       const etf = await getETFProfile(symbol);
       if (!etf) {
         return {
@@ -99,7 +118,7 @@ export async function executeTool(
     }
 
     case 'compare_etfs': {
-      const symbols = (args.symbols as string[]).map(s => s.toUpperCase());
+      const { symbols } = validatedArgs as ToolArgs<'compare_etfs'>;
       const etfs = await compareETFs(symbols);
       if (etfs.length === 0) {
         return {
@@ -115,7 +134,7 @@ export async function executeTool(
     }
 
     case 'compare_stocks': {
-      const symbols = (args.symbols as string[]).map(s => s.toUpperCase());
+      const { symbols } = validatedArgs as ToolArgs<'compare_stocks'>;
       const profiles = await compareStocks(symbols);
       if (profiles.length === 0) {
         return {
@@ -131,7 +150,7 @@ export async function executeTool(
     }
 
     case 'get_filings': {
-      const symbol = (args.symbol as string).toUpperCase();
+      const { symbol } = validatedArgs as ToolArgs<'get_filings'>;
       const filings = await getRecentFilings(symbol, ['10-K', '10-Q', '8-K'], 15);
       if (!filings || filings.length === 0) {
         return {

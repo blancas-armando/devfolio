@@ -5,6 +5,7 @@
 
 import { complete } from '../ai/client.js';
 import { extractJson } from '../ai/json.js';
+import { buildPortfolioPrompt } from '../ai/promptLibrary.js';
 import { getHoldings } from '../db/portfolio.js';
 import { getQuotes } from './market.js';
 import type { Quote } from '../types/index.js';
@@ -170,10 +171,7 @@ export async function analyzePortfolio(): Promise<PortfolioInsight | null> {
     .map(s => `${s.sector}: ${s.weight.toFixed(1)}%`)
     .join(', ');
 
-  const prompt = `You are a portfolio advisor. Analyze this portfolio and provide insights.
-
-PORTFOLIO:
-Total Value: $${totalValue.toFixed(2)}
+  const portfolioData = `Total Value: $${totalValue.toFixed(2)}
 Total Gain: ${totalGainPercent >= 0 ? '+' : ''}${totalGainPercent.toFixed(1)}%
 Holdings: ${holdings.length}
 
@@ -181,25 +179,9 @@ POSITIONS (by weight):
 ${holdingsData}
 
 SECTOR ALLOCATION:
-${sectorsData}
+${sectorsData}`;
 
-Provide analysis in JSON format:
-{
-  "score": 0-100 (overall health score),
-  "grade": "A" or "B" or "C" or "D" or "F",
-  "summary": "1-2 sentence portfolio assessment",
-  "strengths": ["strength1", "strength2"] (2-3 positives),
-  "concerns": ["concern1", "concern2"] (2-3 issues to watch),
-  "suggestions": ["suggestion1", "suggestion2"] (2-3 actionable recommendations),
-  "riskLevel": "conservative" or "moderate" or "aggressive",
-  "diversificationScore": 0-100
-}
-
-Consider:
-- Concentration risk (any position >20% is risky)
-- Sector diversification
-- Overall performance
-- Risk-adjusted returns`;
+  const prompt = buildPortfolioPrompt(portfolioData);
 
   try {
     const response = await complete(
