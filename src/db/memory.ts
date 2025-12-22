@@ -369,6 +369,101 @@ export function extractSymbolsFromText(text: string): string[] {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Session Listing & Search
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Get all sessions with message counts
+ */
+export function getAllSessions(limit = 10): Array<ChatSession & { messageCount: number }> {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT
+      s.id, s.started_at, s.last_active_at, s.context_summary,
+      COUNT(m.id) as message_count
+    FROM chat_sessions s
+    LEFT JOIN chat_messages m ON m.session_id = s.id
+    GROUP BY s.id
+    ORDER BY s.last_active_at DESC
+    LIMIT ?
+  `).all(limit) as Array<{
+    id: number;
+    started_at: string;
+    last_active_at: string;
+    context_summary: string | null;
+    message_count: number;
+  }>;
+
+  return rows.map(row => ({
+    id: row.id,
+    startedAt: new Date(row.started_at),
+    lastActiveAt: new Date(row.last_active_at),
+    contextSummary: row.context_summary,
+    messageCount: row.message_count,
+  }));
+}
+
+/**
+ * Search messages across all sessions
+ */
+export function searchMessages(query: string, limit = 20): ChatMessage[] {
+  const db = getDb();
+  const searchPattern = `%${query}%`;
+  const rows = db.prepare(`
+    SELECT id, session_id, role, content, tool_calls, tool_results, created_at
+    FROM chat_messages
+    WHERE content LIKE ?
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(searchPattern, limit) as Array<{
+    id: number;
+    session_id: number;
+    role: string;
+    content: string;
+    tool_calls: string | null;
+    tool_results: string | null;
+    created_at: string;
+  }>;
+
+  return rows.map(row => ({
+    id: row.id,
+    sessionId: row.session_id,
+    role: row.role as 'user' | 'assistant' | 'system',
+    content: row.content,
+    toolCalls: row.tool_calls,
+    toolResults: row.tool_results,
+    createdAt: new Date(row.created_at),
+  }));
+}
+
+/**
+ * Get all tracked symbols with their contexts
+ */
+export function getAllTrackedSymbols(limit = 20): ConversationSymbol[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT id, session_id, symbol, mentioned_at, context
+    FROM conversation_symbols
+    ORDER BY mentioned_at DESC
+    LIMIT ?
+  `).all(limit) as Array<{
+    id: number;
+    session_id: number;
+    symbol: string;
+    mentioned_at: string;
+    context: string | null;
+  }>;
+
+  return rows.map(row => ({
+    id: row.id,
+    sessionId: row.session_id,
+    symbol: row.symbol,
+    mentionedAt: new Date(row.mentioned_at),
+    context: row.context,
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════════════════
 

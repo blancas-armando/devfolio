@@ -15,7 +15,7 @@ import {
   extractSymbolsFromText,
   type ChatSession,
 } from '../db/memory.js';
-import { learnFromText } from '../db/preferences.js';
+import { learnFromText, type LearnedPreference } from '../db/preferences.js';
 import type { Message, ToolResult } from '../types/index.js';
 import type { AIMessage, AITool } from './providers/types.js';
 
@@ -23,6 +23,7 @@ export interface AgentResponse {
   message: string;
   toolResults: ToolResult[];
   sessionId?: number;
+  learnedPreferences: LearnedPreference[];
 }
 
 // Current active session (managed per process)
@@ -83,6 +84,7 @@ function buildMessages(userMessage: string, history: Message[], sessionId?: numb
 
 /**
  * Process and store conversation data
+ * Returns learned preferences for transparency
  */
 function processConversation(
   sessionId: number,
@@ -90,7 +92,7 @@ function processConversation(
   assistantMessage: string,
   toolCalls?: unknown[],
   toolResults?: unknown[]
-): void {
+): LearnedPreference[] {
   // Store messages
   addMessage(sessionId, 'user', userMessage);
   addMessage(sessionId, 'assistant', assistantMessage, toolCalls, toolResults);
@@ -104,8 +106,8 @@ function processConversation(
     trackSymbol(sessionId, symbol, userMessage.substring(0, 100));
   }
 
-  // Learn preferences from user message
-  learnFromText(userMessage);
+  // Learn preferences from user message and return what was learned
+  return learnFromText(userMessage);
 }
 
 /**
@@ -158,8 +160,8 @@ export async function chat(userMessage: string, history: Message[] = []): Promis
 
     const assistantMessage = finalResponse.content ?? '';
 
-    // Store conversation in memory
-    processConversation(
+    // Store conversation in memory and get learned preferences
+    const learnedPreferences = processConversation(
       session.id,
       userMessage,
       assistantMessage,
@@ -171,18 +173,20 @@ export async function chat(userMessage: string, history: Message[] = []): Promis
       message: assistantMessage,
       toolResults,
       sessionId: session.id,
+      learnedPreferences,
     };
   }
 
   const assistantMessage = response.content ?? '';
 
-  // Store conversation in memory
-  processConversation(session.id, userMessage, assistantMessage);
+  // Store conversation in memory and get learned preferences
+  const learnedPreferences = processConversation(session.id, userMessage, assistantMessage);
 
   return {
     message: assistantMessage,
     toolResults: [],
     sessionId: session.id,
+    learnedPreferences,
   };
 }
 
@@ -239,8 +243,8 @@ export async function streamChat(
       }
     }
 
-    // Store conversation in memory
-    processConversation(
+    // Store conversation in memory and get learned preferences
+    const learnedPreferences = processConversation(
       session.id,
       userMessage,
       fullMessage,
@@ -248,15 +252,15 @@ export async function streamChat(
       toolResults
     );
 
-    return { message: fullMessage, toolResults, sessionId: session.id };
+    return { message: fullMessage, toolResults, sessionId: session.id, learnedPreferences };
   }
 
   // No tools, emit response directly
   const content = response.content ?? '';
   onToken(content);
 
-  // Store conversation in memory
-  processConversation(session.id, userMessage, content);
+  // Store conversation in memory and get learned preferences
+  const learnedPreferences = processConversation(session.id, userMessage, content);
 
-  return { message: content, toolResults: [], sessionId: session.id };
+  return { message: content, toolResults: [], sessionId: session.id, learnedPreferences };
 }

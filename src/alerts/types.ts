@@ -88,3 +88,33 @@ export interface AlertEvent {
 }
 
 export type AlertCallback = (event: AlertEvent) => void;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Webhook Configuration
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface WebhookConfig {
+  id: number;
+  url: string;
+  enabled: boolean;
+  name?: string;
+  alertTypes?: AlertType[];  // If empty, send all alerts
+  createdAt: Date;
+  lastUsedAt?: Date;
+  failCount: number;
+}
+
+export interface WebhookPayload {
+  event: 'alert';
+  timestamp: string;
+  alert: {
+    id: number;
+    type: AlertType;
+    severity: AlertSeverity;
+    symbol: string | null;
+    title: string;
+    message: string;
+    data: Record<string, unknown>;
+    createdAt: string;
+  };
+}

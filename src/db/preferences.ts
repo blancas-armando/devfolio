@@ -121,6 +121,24 @@ export function deletePreference(key: string): void {
   db.prepare('DELETE FROM user_preferences WHERE key = ?').run(key);
 }
 
+/**
+ * Clear all preferences
+ */
+export function clearAllPreferences(): number {
+  const db = getDb();
+  const result = db.prepare('DELETE FROM user_preferences').run();
+  return result.changes;
+}
+
+/**
+ * Get count of preferences
+ */
+export function getPreferenceCount(): number {
+  const db = getDb();
+  const row = db.prepare('SELECT COUNT(*) as count FROM user_preferences').get() as { count: number };
+  return row.count;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Preference Inference
 // ═══════════════════════════════════════════════════════════════════════════
@@ -196,11 +214,21 @@ export function inferPreferences(text: string): Array<{ key: PreferenceKey; valu
   return inferred;
 }
 
+/** Result of learning from text */
+export interface LearnedPreference {
+  key: PreferenceKey;
+  value: string;
+  confidence: number;
+  action: 'new' | 'updated' | 'reinforced';
+}
+
 /**
  * Learn preferences from text (infer and store)
+ * Returns what was learned for transparency
  */
-export function learnFromText(text: string): void {
+export function learnFromText(text: string): LearnedPreference[] {
   const inferred = inferPreferences(text);
+  const learned: LearnedPreference[] = [];
 
   for (const { key, value, confidence } of inferred) {
     const existing = getPreference(key);
@@ -209,15 +237,20 @@ export function learnFromText(text: string): void {
       // If same value, increase confidence
       if (existing.value === value) {
         updateConfidence(key, 0.1);
+        learned.push({ key, value, confidence: Math.min(1.0, existing.confidence + 0.1), action: 'reinforced' });
       } else if (confidence > existing.confidence) {
         // If different value with higher confidence, update
         setPreference(key, value, confidence);
+        learned.push({ key, value, confidence, action: 'updated' });
       }
     } else {
       // New preference
       setPreference(key, value, confidence);
+      learned.push({ key, value, confidence, action: 'new' });
     }
   }
+
+  return learned;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

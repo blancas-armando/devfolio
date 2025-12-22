@@ -92,5 +92,102 @@ export function initializeSchema(db: Database.Database) {
       confidence REAL DEFAULT 0.5,
       last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- ═══════════════════════════════════════════════════════════════════════════
+    -- RAG: SEC Filings Cache and Search
+    -- ═══════════════════════════════════════════════════════════════════════════
+
+    -- Cached SEC filings metadata
+    CREATE TABLE IF NOT EXISTS sec_filings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      symbol TEXT NOT NULL,
+      form TEXT NOT NULL,
+      filing_date TEXT NOT NULL,
+      accession_number TEXT UNIQUE NOT NULL,
+      file_url TEXT NOT NULL,
+      raw_text TEXT,
+      processed_at DATETIME
+    );
+    CREATE INDEX IF NOT EXISTS idx_sec_filings_symbol ON sec_filings(symbol);
+    CREATE INDEX IF NOT EXISTS idx_sec_filings_form ON sec_filings(form);
+    CREATE INDEX IF NOT EXISTS idx_sec_filings_date ON sec_filings(filing_date DESC);
+
+    -- Filing chunks for RAG retrieval
+    CREATE TABLE IF NOT EXISTS filing_chunks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      filing_id INTEGER NOT NULL,
+      section_name TEXT,
+      chunk_index INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      token_count INTEGER,
+      FOREIGN KEY (filing_id) REFERENCES sec_filings(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_filing_chunks_filing ON filing_chunks(filing_id);
+    CREATE INDEX IF NOT EXISTS idx_filing_chunks_section ON filing_chunks(section_name);
+
+    -- Embeddings for semantic search (optional - for OpenAI users)
+    CREATE TABLE IF NOT EXISTS filing_embeddings (
+      chunk_id INTEGER PRIMARY KEY,
+      embedding BLOB NOT NULL,
+      model TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (chunk_id) REFERENCES filing_chunks(id) ON DELETE CASCADE
+    );
+
+    -- ═══════════════════════════════════════════════════════════════════════════
+    -- Webhooks
+    -- ═══════════════════════════════════════════════════════════════════════════
+
+    -- Webhook configurations for alert delivery
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      url TEXT UNIQUE NOT NULL,
+      name TEXT,
+      enabled INTEGER DEFAULT 1,
+      alert_types TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_used_at DATETIME,
+      fail_count INTEGER DEFAULT 0
+    );
   `);
+
+  // Create FTS5 virtual table for full-text search (fallback for non-OpenAI users)
+  // This is done separately because virtual tables can't be in IF NOT EXISTS blocks
+  try {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS filing_chunks_fts
+      USING fts5(
+        content,
+        section_name,
+        content='filing_chunks',
+        content_rowid='id'
+      );
+    `);
+  } catch {
+    // FTS table may already exist
+  }
+
+  // Create triggers to keep FTS index in sync
+  try {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS filing_chunks_ai AFTER INSERT ON filing_chunks BEGIN
+        INSERT INTO filing_chunks_fts(rowid, content, section_name)
+        VALUES (new.id, new.content, new.section_name);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS filing_chunks_ad AFTER DELETE ON filing_chunks BEGIN
+        INSERT INTO filing_chunks_fts(filing_chunks_fts, rowid, content, section_name)
+        VALUES ('delete', old.id, old.content, old.section_name);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS filing_chunks_au AFTER UPDATE ON filing_chunks BEGIN
+        INSERT INTO filing_chunks_fts(filing_chunks_fts, rowid, content, section_name)
+        VALUES ('delete', old.id, old.content, old.section_name);
+        INSERT INTO filing_chunks_fts(rowid, content, section_name)
+        VALUES (new.id, new.content, new.section_name);
+      END;
+    `);
+  } catch {
+    // Triggers may already exist
+  }
 }

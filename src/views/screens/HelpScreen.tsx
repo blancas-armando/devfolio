@@ -49,6 +49,9 @@ const sections: CommandSection[] = [
     commands: [
       { cmd: 'filings <SYM>', desc: 'List 10-K, 10-Q, 8-K' },
       { cmd: 'filing <N>', desc: 'Read filing N' },
+      { cmd: 'filings <SYM> cache', desc: 'Index filings for search' },
+      { cmd: 'filings <SYM> search <q>', desc: 'Search cached filings' },
+      { cmd: 'filings <SYM> risks', desc: 'Compare risk factors' },
     ],
   },
   {
@@ -65,6 +68,13 @@ const sections: CommandSection[] = [
   {
     title: 'OTHER',
     commands: [
+      { cmd: 'preferences', desc: 'View learned preferences' },
+      { cmd: 'prefs reset', desc: 'Clear all preferences' },
+      { cmd: 'recall', desc: 'View conversation history' },
+      { cmd: 'recall search <q>', desc: 'Search past messages' },
+      { cmd: 'export <target>', desc: 'Export data (watchlist, portfolio...)' },
+      { cmd: 'setup', desc: 'Show API key configuration help' },
+      { cmd: 'alert webhook <cmd>', desc: 'Manage alert webhooks' },
       { cmd: 'history [N]', desc: 'Show command history' },
       { cmd: 'tutorial', desc: 'Interactive tutorial' },
       { cmd: 'clear, home', desc: 'Clear screen' },
