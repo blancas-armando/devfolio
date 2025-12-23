@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="docs/assets/devfolio-banner.png" alt="DevFolio" width="600" />
-</p>
-
-<p align="center">
   <strong>A Bloomberg Terminal for your command line.</strong><br/>
   AI-powered financial analysis in a terminal-native interface.
 </p>
@@ -129,10 +125,10 @@ This is what I learned.
 
 ```bash
 # Run directly (no install)
-npx devfolio
+npx devfolio-cli
 
 # Or install globally
-npm install -g devfolio
+npm install -g devfolio-cli
 ```
 
 ### Setup
@@ -156,7 +152,7 @@ Get a free Groq key at [console.groq.com](https://console.groq.com).
 
 ```bash
 # Start DevFolio
-devfolio
+devfolio-cli
 
 # Get AI market analysis
 > brief
