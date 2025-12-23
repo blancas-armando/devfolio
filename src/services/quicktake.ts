@@ -3,19 +3,10 @@
  * Generates brief AI-powered stock assessments
  */
 
-import Groq from 'groq-sdk';
+import { complete, isAIAvailable } from '../ai/client.js';
+import { extractJson } from '../ai/json.js';
+import { buildQuickTakePrompt } from '../ai/promptLibrary.js';
 import type { CompanyProfile } from './market.js';
-import { extractJson } from '../utils/errors.js';
-
-let _groq: Groq | null = null;
-function getGroq(): Groq {
-  if (!_groq) {
-    _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  }
-  return _groq;
-}
-
-const MODEL = 'llama-3.3-70b-versatile';
 
 export interface QuickTake {
   sentiment: 'bullish' | 'bearish' | 'neutral';
@@ -47,7 +38,9 @@ function formatProfileForAI(profile: CompanyProfile): string {
   }
   if (profile.targetPrice) {
     const upside = ((profile.targetPrice - profile.price) / profile.price) * 100;
-    lines.push(`Analyst Target: $${profile.targetPrice.toFixed(2)} (${upside >= 0 ? '+' : ''}${upside.toFixed(1)}% upside)`);
+    lines.push(
+      `Analyst Target: $${profile.targetPrice.toFixed(2)} (${upside >= 0 ? '+' : ''}${upside.toFixed(1)}% upside)`
+    );
   }
   if (profile.recommendationKey) {
     lines.push(`Analyst Rating: ${profile.recommendationKey.toUpperCase()}`);
@@ -59,49 +52,43 @@ function formatProfileForAI(profile: CompanyProfile): string {
   return lines.join('\n');
 }
 
+function isQuickTakeResponse(obj: unknown): obj is QuickTake {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return (
+    (o.sentiment === 'bullish' || o.sentiment === 'bearish' || o.sentiment === 'neutral') &&
+    typeof o.summary === 'string' &&
+    typeof o.keyPoint === 'string'
+  );
+}
+
 export async function getQuickTake(profile: CompanyProfile): Promise<QuickTake | null> {
-  if (!process.env.GROQ_API_KEY) {
+  if (!isAIAvailable()) {
     return null;
   }
 
   try {
     const data = formatProfileForAI(profile);
+    const prompt = buildQuickTakePrompt(data);
 
-    const prompt = `You are a concise equity analyst. Given this stock data, provide a quick take in JSON format.
+    const response = await complete(
+      {
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 150,
+        temperature: 0.3,
+      },
+      'quick'
+    );
 
-${data}
+    if (!response.content) return null;
 
-Respond with ONLY this JSON (no other text):
-{
-  "sentiment": "bullish" or "bearish" or "neutral",
-  "summary": "1 sentence (max 80 chars) summarizing the investment case",
-  "keyPoint": "1 key metric or factor to watch (max 50 chars)"
-}
-
-Be specific and use actual numbers. No generic statements.`;
-
-    const response = await getGroq().chat.completions.create({
-      model: MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 150,
-      temperature: 0.3,
-    });
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) return null;
-
-    interface QuickTakeResponse {
-      sentiment?: 'bullish' | 'bearish' | 'neutral';
-      summary?: string;
-      keyPoint?: string;
-    }
-    const parsed = extractJson<QuickTakeResponse>(content);
-    if (!parsed) return null;
+    const result = extractJson<QuickTake>(response.content, isQuickTakeResponse);
+    if (!result.success || !result.data) return null;
 
     return {
-      sentiment: parsed.sentiment || 'neutral',
-      summary: parsed.summary || '',
-      keyPoint: parsed.keyPoint || '',
+      sentiment: result.data.sentiment,
+      summary: result.data.summary,
+      keyPoint: result.data.keyPoint,
     };
   } catch {
     return null;

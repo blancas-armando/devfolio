@@ -4,6 +4,14 @@ import { JSDOM } from 'jsdom';
 import { execSync } from 'child_process';
 import type { Quote } from '../types/index.js';
 import { CACHE_TTL, HISTORICAL_DAYS } from '../constants/index.js';
+import { recordApiCall, recordCacheHit, recordError } from './stats.js';
+import {
+  rateLimitedCall,
+  getRefreshMultiplier,
+  getRateLimitStatus,
+  shouldThrottle,
+} from './ratelimit.js';
+import { cacheQuote, cacheQuotes, getCachedQuote, getCachedQuotes, type CachedQuote } from '../db/quoteCache.js';
 
 // Initialize Yahoo Finance client with notices suppressed
 const yahooFinance = new YahooFinance({
@@ -21,12 +29,40 @@ function getCached<T>(key: string): T | null {
     cache.delete(key);
     return null;
   }
+  recordCacheHit(key);
   return entry.data as T;
 }
 
 function setCache(key: string, data: unknown, ttlMs: number) {
   cache.set(key, { data, expires: Date.now() + ttlMs });
 }
+
+// Wrapper to track API calls with rate limiting
+async function trackedApiCall<T>(
+  endpoint: string,
+  fn: () => Promise<T>,
+  options: { essential?: boolean; dedupeKey?: string } = {}
+): Promise<T> {
+  const start = Date.now();
+  try {
+    const result = await rateLimitedCall(
+      endpoint,
+      async () => {
+        const data = await fn();
+        recordApiCall(endpoint, false, Date.now() - start);
+        return data;
+      },
+      options
+    );
+    return result;
+  } catch (error) {
+    recordError(error instanceof Error ? error.message : 'Unknown error');
+    throw error;
+  }
+}
+
+// Re-export rate limit utilities for use by other modules
+export { getRefreshMultiplier, getRateLimitStatus, shouldThrottle };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Company Profile Types
@@ -119,10 +155,34 @@ export interface CompanyProfile {
 // Quote Functions
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function getQuote(symbol: string): Promise<Quote | null> {
+// Live mode flag - when true, bypass quote cache entirely
+let liveModeEnabled = false;
+
+export function setLiveMode(enabled: boolean): void {
+  liveModeEnabled = enabled;
+}
+
+export function isLiveModeEnabled(): boolean {
+  return liveModeEnabled;
+}
+
+export interface GetQuoteOptions {
+  /** Skip cache and fetch fresh data (default: false) */
+  fresh?: boolean;
+}
+
+export async function getQuote(
+  symbol: string,
+  options: GetQuoteOptions = {}
+): Promise<Quote | null> {
+  const { fresh = false } = options;
   const cacheKey = `quote:${symbol}`;
-  const cached = getCached<Quote>(cacheKey);
-  if (cached) return cached;
+
+  // Skip cache if: fresh requested, live mode enabled
+  if (!fresh && !liveModeEnabled) {
+    const cached = getCached<Quote>(cacheKey);
+    if (cached) return cached;
+  }
 
   try {
     const result = await yahooFinance.quote(symbol);
@@ -140,16 +200,100 @@ export async function getQuote(symbol: string): Promise<Quote | null> {
       low52w: result.fiftyTwoWeekLow,
     };
 
-    setCache(cacheKey, quote, CACHE_TTL.quote);
+    // Shorter cache for quotes - 10 seconds (in-memory)
+    setCache(cacheKey, quote, 10_000);
+
+    // Also persist to database for offline viewing
+    cacheQuote(quote);
+
     return quote;
   } catch {
+    // Try persistent cache fallback for offline viewing
+    const persistentCached = getCachedQuote(symbol);
+    if (persistentCached) {
+      return persistentCached;
+    }
     return null;
   }
 }
 
-export async function getQuotes(symbols: string[]): Promise<Quote[]> {
-  const results = await Promise.all(symbols.map(getQuote));
-  return results.filter((q): q is Quote => q !== null);
+export async function getQuotes(
+  symbols: string[],
+  options: GetQuoteOptions = {}
+): Promise<Quote[]> {
+  if (symbols.length === 0) return [];
+
+  const { fresh = false } = options;
+
+  // Check cache for all symbols first
+  const cached: Quote[] = [];
+  const uncached: string[] = [];
+
+  if (!fresh && !liveModeEnabled) {
+    for (const symbol of symbols) {
+      const cachedQuote = getCached<Quote>(`quote:${symbol}`);
+      if (cachedQuote) {
+        cached.push(cachedQuote);
+      } else {
+        uncached.push(symbol);
+      }
+    }
+  } else {
+    uncached.push(...symbols);
+  }
+
+  // If all cached, return immediately
+  if (uncached.length === 0) {
+    return cached;
+  }
+
+  try {
+    // Batch fetch all uncached symbols in ONE API call
+    const results = await trackedApiCall(
+      `quote/batch/${uncached.length}`,
+      () => yahooFinance.quote(uncached),
+      { dedupeKey: `quotes:${uncached.sort().join(',')}` }
+    );
+
+    const resultsArray = Array.isArray(results) ? results : [results];
+    const freshQuotes: Quote[] = [];
+
+    for (const result of resultsArray) {
+      if (!result) continue;
+
+      const quote: Quote = {
+        symbol: result.symbol,
+        price: result.regularMarketPrice ?? 0,
+        change: result.regularMarketChange ?? 0,
+        changePercent: result.regularMarketChangePercent ?? 0,
+        volume: result.regularMarketVolume ?? 0,
+        marketCap: result.marketCap,
+        pe: result.trailingPE,
+        high52w: result.fiftyTwoWeekHigh,
+        low52w: result.fiftyTwoWeekLow,
+      };
+
+      // Cache individual quotes (in-memory)
+      setCache(`quote:${quote.symbol}`, quote, 10_000);
+      freshQuotes.push(quote);
+    }
+
+    // Persist all fresh quotes to database for offline viewing
+    if (freshQuotes.length > 0) {
+      cacheQuotes(freshQuotes);
+    }
+
+    return [...cached, ...freshQuotes];
+  } catch {
+    // Fallback to persistent cache for offline viewing
+    if (cached.length === 0) {
+      const persistentCached = getCachedQuotes(symbols);
+      if (persistentCached.length > 0) {
+        return persistentCached;
+      }
+    }
+    return cached; // Return in-memory cached quotes on error
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -170,14 +314,25 @@ const TIMEFRAME_DAYS: Record<string, number> = {
   'all': 18250,
 };
 
+export interface GetProfileOptions {
+  /** Skip cache and fetch fresh data (default: false) */
+  fresh?: boolean;
+}
+
 export async function getCompanyProfile(
   symbol: string,
-  timeframe?: string
+  timeframe?: string,
+  options: GetProfileOptions = {}
 ): Promise<CompanyProfile | null> {
+  const { fresh = false } = options;
   const days = timeframe ? (TIMEFRAME_DAYS[timeframe] ?? 90) : 90;
   const cacheKey = `profile:${symbol}:${days}`;
-  const cached = getCached<CompanyProfile>(cacheKey);
-  if (cached) return cached;
+
+  // Skip cache if fresh requested or live mode enabled
+  if (!fresh && !liveModeEnabled) {
+    const cached = getCached<CompanyProfile>(cacheKey);
+    if (cached) return cached;
+  }
 
   try {
     // Fetch comprehensive data using quoteSummary
@@ -220,7 +375,8 @@ export async function getCompanyProfile(
       // Price Data
       price: price.regularMarketPrice ?? 0,
       change: price.regularMarketChange ?? 0,
-      changePercent: price.regularMarketChangePercent ?? 0,
+      // quoteSummary returns decimals (0.08 = 8%), need to multiply by 100
+      changePercent: (price.regularMarketChangePercent ?? 0) * 100,
       high52w: detail?.fiftyTwoWeekHigh ?? null,
       low52w: detail?.fiftyTwoWeekLow ?? null,
       avgVolume: detail?.averageVolume ?? null,
@@ -232,17 +388,17 @@ export async function getCompanyProfile(
       floatShares: stats?.floatShares ?? null,
       beta: detail?.beta ?? null,
 
-      // Financials
+      // Financials (quoteSummary returns decimals for percentages)
       revenue: financial?.totalRevenue ?? null,
-      revenueGrowth: financial?.revenueGrowth ?? null,
+      revenueGrowth: financial?.revenueGrowth != null ? financial.revenueGrowth * 100 : null,
       grossProfit: financial?.grossProfits ?? null,
-      grossMargin: financial?.grossMargins ?? null,
-      operatingMargin: financial?.operatingMargins ?? null,
-      profitMargin: financial?.profitMargins ?? null,
+      grossMargin: financial?.grossMargins != null ? financial.grossMargins * 100 : null,
+      operatingMargin: financial?.operatingMargins != null ? financial.operatingMargins * 100 : null,
+      profitMargin: financial?.profitMargins != null ? financial.profitMargins * 100 : null,
       ebitda: financial?.ebitda ?? null,
       netIncome: stats?.netIncomeToCommon ?? null,
       eps: stats?.trailingEps ?? null,
-      epsGrowth: stats?.earningsQuarterlyGrowth ?? null,
+      epsGrowth: stats?.earningsQuarterlyGrowth != null ? stats.earningsQuarterlyGrowth * 100 : null,
       freeCashFlow: financial?.freeCashflow ?? null,
       operatingCashFlow: financial?.operatingCashflow ?? null,
       // CAPEX derived as OCF - FCF (represented as negative, so we negate)
@@ -266,10 +422,10 @@ export async function getCompanyProfile(
       evToRevenue: stats?.enterpriseToRevenue ?? null,
       evToEbitda: stats?.enterpriseToEbitda ?? null,
 
-      // Dividends
-      dividendYield: detail?.dividendYield ?? null,
+      // Dividends (quoteSummary returns decimals for percentages)
+      dividendYield: detail?.dividendYield != null ? detail.dividendYield * 100 : null,
       dividendRate: detail?.dividendRate ?? null,
-      payoutRatio: detail?.payoutRatio ?? null,
+      payoutRatio: detail?.payoutRatio != null ? detail.payoutRatio * 100 : null,
       exDividendDate: detail?.exDividendDate ? new Date(detail.exDividendDate).toLocaleDateString() : null,
 
       // Analyst Data
@@ -293,7 +449,8 @@ export async function getCompanyProfile(
       historicalData: historicalDataWithDates,
     };
 
-    setCache(cacheKey, companyProfile, CACHE_TTL.quote * 2); // Cache longer for profiles
+    // 10 second cache for profiles (same as quotes for consistency)
+    setCache(cacheKey, companyProfile, 10_000);
     return companyProfile;
   } catch {
     return null;
@@ -445,6 +602,243 @@ export async function getOHLCVData(
 
 export function timeframeToDays(timeframe: ChartTimeframe): number {
   return TIMEFRAME_CONFIG[timeframe].days;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Intraday Data (for live mode)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface IntradayBar {
+  time: Date;
+  price: number;
+  volume: number;
+}
+
+export interface IntradayData {
+  symbol: string;
+  bars: IntradayBar[];
+  dayOpen: number;
+  dayHigh: number;
+  dayLow: number;
+  currentPrice: number;
+  previousClose: number;
+  change: number;
+  changePercent: number;
+  volume: number;
+  avgVolume: number;
+  relativeVolume: number;
+  vwap: number;
+  marketState: 'PRE' | 'REGULAR' | 'POST' | 'CLOSED';
+  // Extended metrics
+  fiftyTwoWeekHigh: number;
+  fiftyTwoWeekLow: number;
+  marketCap: number;
+  peRatio: number | null;
+  // Performance periods
+  performance: {
+    week: number | null;    // 5 day change %
+    month: number | null;   // 1 month change %
+    threeMonth: number | null;
+    sixMonth: number | null;
+    ytd: number | null;
+    year: number | null;    // 52 week change %
+  };
+}
+
+export async function getIntradayData(symbol: string): Promise<IntradayData | null> {
+  // Short-term cache for intraday data (8 seconds) - reduces API calls in live mode
+  // This is separate from the regular cache and works even in live mode
+  const cacheKey = `intraday:${symbol}`;
+  const cached = getCached<IntradayData>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const now = new Date();
+    const marketOpen = new Date(now);
+    marketOpen.setHours(9, 30, 0, 0); // 9:30 AM
+
+    // Fetch chart and quote data in parallel (with tracking and deduplication)
+    const [chartResult, quoteResult] = await Promise.all([
+      trackedApiCall(
+        `chart/${symbol}`,
+        () => yahooFinance.chart(symbol, {
+          period1: marketOpen,
+          period2: now,
+          interval: '5m',
+        }),
+        { dedupeKey: `intraday-chart:${symbol}`, essential: true }
+      ),
+      trackedApiCall(
+        `quoteSummary/${symbol}`,
+        () => yahooFinance.quoteSummary(symbol, {
+          modules: ['price', 'summaryDetail', 'defaultKeyStatistics'],
+        }),
+        { dedupeKey: `intraday-quote:${symbol}`, essential: true }
+      ),
+    ]);
+
+    const meta = chartResult.meta;
+    if (!meta) return null;
+
+    const price = quoteResult.price;
+    const summary = quoteResult.summaryDetail;
+    const keyStats = quoteResult.defaultKeyStatistics;
+
+    const bars: IntradayBar[] = chartResult.quotes
+      .filter(q => q.date && q.close !== null && q.close !== undefined)
+      .map(q => ({
+        time: q.date!,
+        price: q.close!,
+        volume: q.volume ?? 0,
+      }));
+
+    // Calculate VWAP (Volume Weighted Average Price)
+    let vwapNumerator = 0;
+    let vwapDenominator = 0;
+    for (const bar of bars) {
+      vwapNumerator += bar.price * bar.volume;
+      vwapDenominator += bar.volume;
+    }
+    const currentPrice = Number(price?.regularMarketPrice) || (meta.regularMarketPrice ?? bars[bars.length - 1]?.price ?? 0);
+    const vwap = vwapDenominator > 0 ? vwapNumerator / vwapDenominator : currentPrice;
+
+    // Determine market state - normalize various API values
+    let marketState: 'PRE' | 'REGULAR' | 'POST' | 'CLOSED' = 'CLOSED';
+    const state = String(price?.marketState ?? meta.marketState ?? '').toUpperCase();
+    if (state.includes('PRE')) marketState = 'PRE';
+    else if (state.includes('REGULAR') || state === 'OPEN') marketState = 'REGULAR';
+    else if (state.includes('POST') || state.includes('AFTER')) marketState = 'POST';
+    else if (state.includes('CLOSE')) marketState = 'CLOSED';
+    else {
+      // Fallback: determine from current time (US Eastern)
+      const etHour = now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false });
+      const etMinute = now.toLocaleString('en-US', { timeZone: 'America/New_York', minute: 'numeric' });
+      const hour = parseInt(etHour, 10);
+      const minute = parseInt(etMinute, 10);
+      const timeInMinutes = hour * 60 + minute;
+      const isWeekday = [1, 2, 3, 4, 5].includes(now.getDay());
+
+      if (isWeekday) {
+        if (timeInMinutes >= 4 * 60 && timeInMinutes < 9 * 60 + 30) marketState = 'PRE';
+        else if (timeInMinutes >= 9 * 60 + 30 && timeInMinutes < 16 * 60) marketState = 'REGULAR';
+        else if (timeInMinutes >= 16 * 60 && timeInMinutes < 20 * 60) marketState = 'POST';
+      }
+    }
+
+    // Calculate day high/low from bars if not in meta
+    const barPrices = bars.map(b => b.price);
+    const dayHigh = Number(price?.regularMarketDayHigh) || Number(meta.regularMarketDayHigh) || Math.max(...barPrices, 0);
+    const dayLow = Number(price?.regularMarketDayLow) || Number(meta.regularMarketDayLow) || Math.min(...barPrices, Infinity);
+    const totalVolume = Number(price?.regularMarketVolume) || bars.reduce((sum, b) => sum + b.volume, 0);
+
+    // Get average volume from quote data (more reliable)
+    const avgVolume = Number(summary?.averageVolume) || Number(price?.averageDailyVolume3Month) || 0;
+
+    // Calculate relative volume properly - compare to expected volume at this time of day
+    // Approximate: if market has been open X hours out of 6.5, expect X/6.5 of avg volume
+    const marketOpenTime = 9 * 60 + 30; // 9:30 AM in minutes
+    const marketCloseTime = 16 * 60; // 4:00 PM in minutes
+    const etHour = parseInt(now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }), 10);
+    const etMinute = parseInt(now.toLocaleString('en-US', { timeZone: 'America/New_York', minute: 'numeric' }), 10);
+    const currentTimeMinutes = etHour * 60 + etMinute;
+    const minutesIntoSession = Math.max(0, Math.min(currentTimeMinutes - marketOpenTime, marketCloseTime - marketOpenTime));
+    const sessionProgress = minutesIntoSession / (marketCloseTime - marketOpenTime);
+    const expectedVolume = avgVolume * sessionProgress;
+    const relativeVolume = expectedVolume > 0 ? totalVolume / expectedVolume : 0;
+
+    // Get 52-week data
+    const fiftyTwoWeekHigh = Number(summary?.fiftyTwoWeekHigh) || 0;
+    const fiftyTwoWeekLow = Number(summary?.fiftyTwoWeekLow) || 0;
+
+    // Performance metrics - convert decimals to percentages
+    const previousClose = Number(price?.regularMarketPreviousClose) || Number(meta.previousClose ?? meta.chartPreviousClose) || 0;
+
+    const intradayData: IntradayData = {
+      symbol: meta.symbol ?? symbol,
+      bars,
+      dayOpen: Number(price?.regularMarketOpen) || Number(meta.regularMarketOpen ?? meta.chartPreviousClose ?? currentPrice),
+      dayHigh: dayHigh === -Infinity ? currentPrice : dayHigh,
+      dayLow: dayLow === Infinity ? currentPrice : dayLow,
+      currentPrice,
+      previousClose,
+      change: currentPrice - previousClose,
+      changePercent: previousClose > 0 ? ((currentPrice - previousClose) / previousClose) * 100 : 0,
+      volume: totalVolume,
+      avgVolume,
+      relativeVolume,
+      vwap,
+      marketState,
+      // Extended metrics
+      fiftyTwoWeekHigh,
+      fiftyTwoWeekLow,
+      marketCap: Number(price?.marketCap) || 0,
+      peRatio: Number(summary?.trailingPE) || null,
+      // Performance periods (Yahoo returns these as decimals, convert to %)
+      performance: {
+        week: keyStats?.['52WeekChange'] !== undefined ? null : null, // 5-day not directly available
+        month: null, // Not directly available
+        threeMonth: null, // Not directly available
+        sixMonth: null, // Not directly available
+        ytd: keyStats?.ytdReturn !== undefined ? Number(keyStats.ytdReturn) * 100 : null,
+        year: keyStats?.['52WeekChange'] !== undefined ? Number(keyStats['52WeekChange']) * 100 : null,
+      },
+    };
+
+    // Cache for 8 seconds - short enough to stay fresh, long enough to reduce duplicate calls
+    setCache(cacheKey, intradayData, 8_000);
+    return intradayData;
+  } catch {
+    return null;
+  }
+}
+
+export interface MarketContext {
+  spy: { price: number; change: number; changePercent: number } | null;
+  qqq: { price: number; change: number; changePercent: number } | null;
+  vix: { value: number; change: number } | null;
+}
+
+export async function getMarketContextQuick(): Promise<MarketContext> {
+  // Use short cache for market context to reduce API calls
+  const cacheKey = 'market-context-quick';
+  const cached = getCached<MarketContext>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const quotes = await trackedApiCall(
+      'quote/market-context',
+      () => yahooFinance.quote(['SPY', 'QQQ', '^VIX']),
+      { dedupeKey: 'market-context', essential: true }
+    );
+    const arr = Array.isArray(quotes) ? quotes : [quotes];
+
+    const spyQuote = arr.find(q => q.symbol === 'SPY');
+    const qqqQuote = arr.find(q => q.symbol === 'QQQ');
+    const vixQuote = arr.find(q => q.symbol === '^VIX');
+
+    const context: MarketContext = {
+      spy: spyQuote ? {
+        price: spyQuote.regularMarketPrice ?? 0,
+        change: spyQuote.regularMarketChange ?? 0,
+        changePercent: spyQuote.regularMarketChangePercent ?? 0,
+      } : null,
+      qqq: qqqQuote ? {
+        price: qqqQuote.regularMarketPrice ?? 0,
+        change: qqqQuote.regularMarketChange ?? 0,
+        changePercent: qqqQuote.regularMarketChangePercent ?? 0,
+      } : null,
+      vix: vixQuote ? {
+        value: vixQuote.regularMarketPrice ?? 0,
+        change: vixQuote.regularMarketChange ?? 0,
+      } : null,
+    };
+
+    // Cache for 15 seconds to reduce API calls in live mode
+    setCache(cacheKey, context, 15_000);
+    return context;
+  } catch {
+    return { spy: null, qqq: null, vix: null };
+  }
 }
 
 export function parseTimeframe(input: string): ChartTimeframe | null {
@@ -745,7 +1139,7 @@ export async function getMarketOverview(): Promise<MarketOverview> {
       asOfDate: new Date(),
     };
 
-    setCache(cacheKey, overview, CACHE_TTL.quote);
+    setCache(cacheKey, overview, CACHE_TTL.marketOverview);
     return overview;
   } catch (error) {
     // Return empty overview on error
@@ -912,7 +1306,7 @@ export async function getNewsFeed(symbols?: string[]): Promise<NewsArticle[]> {
     // Limit to 15 articles
     const limited = articles.slice(0, 15);
 
-    setCache(cacheKey, limited, CACHE_TTL.quote);
+    setCache(cacheKey, limited, CACHE_TTL.news);
     return limited;
   } catch {
     return [];
@@ -1259,7 +1653,7 @@ export async function getMarketBriefData(): Promise<MarketBriefData> {
       upcomingEarnings: upcomingEarnings.slice(0, 6),
     };
 
-    setCache(cacheKey, briefData, CACHE_TTL.quote);
+    setCache(cacheKey, briefData, CACHE_TTL.marketOverview);
     return briefData;
   } catch (error) {
     // Return minimal data on error

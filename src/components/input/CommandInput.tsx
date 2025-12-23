@@ -5,7 +5,7 @@
  * tab completion, and history navigation.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Box as InkBox, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { InputBox, InputArea } from './InputBox.js';
@@ -14,6 +14,10 @@ import { useTabCompletion, useHistory } from './hooks.js';
 import { KeyHintGroup, keyHintPresets } from '../core/KeyHint.js';
 
 import { palette } from '../../design/tokens.js';
+
+// Stable hint arrays to prevent rerenders
+const DEFAULT_HINTS = [keyHintPresets.submit, keyHintPresets.tab];
+const EMPTY_COMPLETIONS: string[] = [];
 
 // Check if we're in a TTY environment that supports raw mode
 const isTTY = process.stdin.isTTY ?? false;
@@ -57,8 +61,11 @@ export function CommandInput({
   const { getCompletions } = useTabCompletion({ customSymbols });
   const { history, prev: historyPrev, next: historyNext, reset: historyReset } = useHistory();
 
-  // Get current completions
-  const completions = value ? getCompletions(value) : [];
+  // Memoize completions to prevent rerenders
+  const completions = useMemo(
+    () => (value ? getCompletions(value) : EMPTY_COMPLETIONS),
+    [value, getCompletions]
+  );
 
   // Handle input change
   const handleChange = useCallback((newValue: string) => {
@@ -162,14 +169,9 @@ export function CommandInput({
     }
   }, { isActive: isTTY });
 
-  // Build status hints
+  // Build status hints (using stable array reference)
   const statusLeft = showHints ? (
-    <KeyHintGroup
-      hints={[
-        keyHintPresets.submit,
-        keyHintPresets.tab,
-      ]}
-    />
+    <KeyHintGroup hints={DEFAULT_HINTS} />
   ) : null;
 
   const statusRight = modelName ? (

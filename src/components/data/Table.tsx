@@ -9,6 +9,7 @@ import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import { palette } from '../../design/tokens.js';
 import { chars, stripAnsi } from '../../design/borders.js';
+import { SkeletonTable } from '../feedback/Skeleton.js';
 
 export type CellAlign = 'left' | 'right' | 'center';
 
@@ -44,6 +45,10 @@ export interface TableProps {
   highlightRow?: (row: Record<string, unknown>, index: number) => boolean;
   /** Highlight color */
   highlightColor?: string;
+  /** Loading state */
+  loading?: boolean;
+  /** Number of skeleton rows when loading */
+  loadingRows?: number;
 }
 
 export function Table({
@@ -54,7 +59,22 @@ export function Table({
   rowGap = 0,
   highlightRow,
   highlightColor = palette.accentDim,
+  loading = false,
+  loadingRows = 5,
 }: TableProps): React.ReactElement {
+  // Show skeleton when loading
+  if (loading) {
+    const columnWidths = columns.map(col => col.width ?? col.header.length + 4);
+    return (
+      <SkeletonTable
+        rows={loadingRows}
+        columns={columns.length}
+        columnWidths={columnWidths}
+        showHeader={showHeader}
+      />
+    );
+  }
+
   // Calculate column widths
   const getColumnWidth = (col: TableColumn): number => {
     if (col.width) return col.width;

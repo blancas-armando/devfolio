@@ -13,10 +13,10 @@
   ],
   "scripts": {
     "dev": "tsx watch src/ink-entry.tsx",
-    "dev:legacy": "tsx watch src/index.tsx",
+    "dev:legacy": "echo 'DEPRECATED: Use npm run dev instead' && tsx watch src/index.tsx",
     "build": "tsup",
     "start": "node dist/ink-entry.js",
-    "start:legacy": "node dist/index.js",
+    "start:legacy": "echo 'DEPRECATED: Use npm start instead' && node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -41,6 +41,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@inkjs/ui": "^2.0.0",
     "@mozilla/readability": "^0.6.0",
     "asciichart": "^1.5.25",
@@ -53,8 +54,10 @@
     "ink-text-input": "^6.0.0",
     "jimp": "^1.6.0",
     "jsdom": "^27.3.0",
+    "openai": "^6.15.0",
     "react": "^18.3.1",
-    "yahoo-finance2": "^3.10.2"
+    "yahoo-finance2": "^3.10.2",
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@testing-library/react-hooks": "^8.0.1",

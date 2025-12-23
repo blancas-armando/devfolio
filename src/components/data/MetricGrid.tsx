@@ -9,6 +9,7 @@ import React from 'react';
 import { Box as InkBox, Text } from 'ink';
 import { MetricRow } from './MetricRow.js';
 import { palette } from '../../design/tokens.js';
+import { SkeletonMetricGrid } from '../feedback/Skeleton.js';
 
 export interface MetricItem {
   label: string;
@@ -28,6 +29,10 @@ export interface MetricGridProps {
   labelWidth?: number;
   /** Gap between columns */
   gap?: number;
+  /** Loading state */
+  loading?: boolean;
+  /** Number of skeleton items when loading */
+  loadingCount?: number;
 }
 
 export function MetricGrid({
@@ -36,7 +41,21 @@ export function MetricGrid({
   columnWidth = 35,
   labelWidth = 14,
   gap = 2,
+  loading = false,
+  loadingCount = 6,
 }: MetricGridProps): React.ReactElement {
+  // Show skeleton when loading
+  if (loading) {
+    return (
+      <SkeletonMetricGrid
+        count={loadingCount}
+        columns={columns}
+        labelWidth={labelWidth}
+        valueWidth={columnWidth - labelWidth - 2}
+      />
+    );
+  }
+
   // Split metrics into rows
   const rows: MetricItem[][] = [];
   for (let i = 0; i < metrics.length; i += columns) {

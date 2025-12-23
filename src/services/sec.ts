@@ -5,15 +5,12 @@
  * API Docs: https://www.sec.gov/search-filings/edgar-application-programming-interfaces
  */
 
-import Groq from 'groq-sdk';
+import { complete } from '../ai/client.js';
+import { extractJson } from '../ai/json.js';
+import { buildFilingSummaryPrompt } from '../ai/promptLibrary.js';
+import { loggers } from '../utils/logger.js';
 
-let _groq: Groq | null = null;
-function getGroq(): Groq {
-  if (!_groq) {
-    _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  }
-  return _groq;
-}
+const log = loggers.sec;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -84,7 +81,8 @@ export async function getCIK(ticker: string): Promise<string | null> {
     }
 
     return null;
-  } catch {
+  } catch (error) {
+    log('getCIK', upperTicker).error('Failed to fetch CIK', error);
     return null;
   }
 }
@@ -121,7 +119,8 @@ export async function getCompanyInfo(ticker: string): Promise<CompanyInfo | null
       fiscalYearEnd: data.fiscalYearEnd ?? 'N/A',
       stateOfIncorporation: data.stateOfIncorporation ?? 'N/A',
     };
-  } catch {
+  } catch (error) {
+    log('getCompanyInfo', ticker).error('Failed to fetch company info', error);
     return null;
   }
 }
@@ -185,7 +184,8 @@ export async function getRecentFilings(
     }
 
     return filings;
-  } catch {
+  } catch (error) {
+    log('getRecentFilings', ticker).error('Failed to fetch recent filings', error);
     return [];
   }
 }
@@ -215,7 +215,8 @@ export async function getFilingText(filing: SECFiling, maxChars: number = 50000)
 
     const text = await response.text();
     return cleanFilingText(text).substring(0, maxChars);
-  } catch {
+  } catch (error) {
+    log('getFilingText').error('Failed to fetch filing text', error, { url: filing.fileUrl });
     return null;
   }
 }
@@ -349,6 +350,25 @@ export interface FilingSummary {
   generatedAt: Date;
 }
 
+interface FilingSummaryResponse {
+  summary: string;
+  keyPoints: string[];
+  sentiment: FilingSentiment;
+  sentimentReason: string;
+  materialEvents?: string[];
+}
+
+function isFilingSummaryResponse(obj: unknown): obj is FilingSummaryResponse {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return (
+    typeof o.summary === 'string' &&
+    Array.isArray(o.keyPoints) &&
+    (o.sentiment === 'positive' || o.sentiment === 'negative' || o.sentiment === 'neutral' || o.sentiment === 'mixed') &&
+    typeof o.sentimentReason === 'string'
+  );
+}
+
 export async function generateFilingSummary(
   filing: SECFiling,
   symbol: string
@@ -360,58 +380,30 @@ export async function generateFilingSummary(
   // Identify 8-K items if applicable
   const items8K = filing.form === '8-K' ? identify8KItems(text) : [];
 
-  // Build the prompt based on filing type
-  const filingTypeContext = filing.form === '8-K'
-    ? `This is an 8-K current report (material events disclosure). Event types identified: ${items8K.length > 0 ? items8K.join(', ') : 'None identified'}`
-    : filing.form === '10-K'
-    ? 'This is an annual report (10-K) containing comprehensive business and financial information.'
-    : filing.form === '10-Q'
-    ? 'This is a quarterly report (10-Q) with interim financial statements.'
-    : `This is a ${filing.form} filing.`;
+  // Build filing content (truncated to fit context)
+  const filingContent = text.slice(0, 40000);
 
-  const prompt = `You are a financial analyst reviewing an SEC filing. Analyze the following filing and provide a concise summary.
-
-FILING DETAILS:
-Company: ${symbol.toUpperCase()}
-Form Type: ${filing.form}
-Filing Date: ${filing.filingDate}
-Description: ${filing.description}
-${filingTypeContext}
-
-FILING CONTENT (excerpt):
-${text.slice(0, 40000)}
-
-Respond in this exact JSON format:
-{
-  "summary": "A clear 2-3 sentence summary of what this filing discloses. Focus on the most important information for investors.",
-  "keyPoints": ["Key point 1", "Key point 2", "Key point 3"],
-  "sentiment": "positive|negative|neutral|mixed",
-  "sentimentReason": "Brief explanation of why the filing has this sentiment for investors"${filing.form === '8-K' ? ',\n  "materialEvents": ["Brief description of each material event disclosed"]' : ''}
-}
-
-Guidelines:
-- For 8-K: Focus on the material events being disclosed (earnings, executive changes, agreements, etc.)
-- For 10-K/10-Q: Focus on financial performance, guidance, and risk factors
-- Sentiment should reflect investor impact (positive = good for shareholders, negative = concerning)
-- Keep keyPoints to 3-5 items, each one sentence
-- Be specific with numbers and facts from the filing`;
+  const prompt = buildFilingSummaryPrompt(
+    symbol.toUpperCase(),
+    filing.form,
+    filing.filingDate,
+    filingContent
+  );
 
   try {
-    const response = await getGroq().chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1500,
-      temperature: 0.3,
-    });
+    const response = await complete(
+      {
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 1500,
+        temperature: 0.3,
+      },
+      'filing'
+    );
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) return null;
+    if (!response.content) return null;
 
-    // Parse JSON response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    const result = extractJson<FilingSummaryResponse>(response.content, isFilingSummaryResponse);
+    if (!result.success || !result.data) return null;
 
     return {
       symbol: symbol.toUpperCase(),
@@ -419,15 +411,16 @@ Guidelines:
       filingDate: filing.filingDate,
       fileUrl: filing.fileUrl,
 
-      summary: parsed.summary ?? 'Unable to generate summary.',
-      keyPoints: parsed.keyPoints ?? [],
-      sentiment: parsed.sentiment ?? 'neutral',
-      sentimentReason: parsed.sentimentReason ?? '',
-      materialEvents: parsed.materialEvents,
+      summary: result.data.summary,
+      keyPoints: result.data.keyPoints,
+      sentiment: result.data.sentiment,
+      sentimentReason: result.data.sentimentReason,
+      materialEvents: result.data.materialEvents,
 
       generatedAt: new Date(),
     };
-  } catch {
+  } catch (error) {
+    log('generateFilingSummary', symbol).error('Failed to generate filing summary', error);
     return null;
   }
 }

@@ -244,3 +244,28 @@ export function resetDisplayConfig(): DisplayConfig {
   saveConfig(config);
   return config.display;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// First Run Detection
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if this is the first time running DevFolio
+ * Returns true if no API keys are configured
+ */
+export function isFirstRun(): boolean {
+  // Check if any API key environment variable is set
+  return !(
+    process.env.GROQ_API_KEY ||
+    process.env.OPENAI_API_KEY ||
+    process.env.ANTHROPIC_API_KEY
+  );
+}
+
+/**
+ * Check if setup has been completed (wizard run at least once)
+ */
+export function isSetupComplete(): boolean {
+  const envPath = join(homedir(), '.devfolio', '.env');
+  return existsSync(envPath);
+}

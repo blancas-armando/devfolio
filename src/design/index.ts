@@ -84,3 +84,57 @@ export {
   logoDimensions,
   decorative,
 } from './ascii-logo.js';
+
+// Animation timing constants
+export {
+  timing,
+  easing,
+  animationPresets,
+  getTiming,
+  getStaggerDelay,
+  getStaggerDuration,
+  type TimingKey,
+} from './timing.js';
+
+// Layout utilities
+export {
+  widths,
+  contentWidth,
+  innerWidth as layoutInnerWidth,
+  resolveWidth,
+  getWidthSet,
+  layout,
+  columnWidth,
+  indentWidth,
+  textFits,
+  getTruncationPoint,
+  type WidthPreset as LayoutWidthPreset,
+  type WidthOptions,
+} from './layout.js';
+
+// Shared types
+export {
+  type BorderVariant,
+  type LineVariant,
+  type BorderOrLineVariant,
+  type SizePreset,
+  type SpacingSize as SpacingSizeType,
+  type StatusVariant,
+  type LoadingState,
+  type StepStatus,
+  type CommonLayoutProps,
+  type CommonPaddingProps,
+  type CommonSpacingProps,
+  type CommonVisualProps,
+  type CommonInteractiveProps,
+  type Alignment,
+  type VerticalAlignment,
+  type TruncationType,
+  type IconName,
+  type ActionItem,
+  type RecoveryAction,
+  type FieldError,
+  type ValidationResult,
+  type AnimationVariant,
+  type AnimationDirection,
+} from './types.js';

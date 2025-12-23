@@ -8,6 +8,9 @@ export interface Quote {
   pe?: number;
   high52w?: number;
   low52w?: number;
+  // Optional staleness info for offline viewing
+  cachedAt?: Date;
+  isStale?: boolean;
 }
 
 export interface HistoricalData {

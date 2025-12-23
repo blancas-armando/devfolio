@@ -11,6 +11,12 @@ import { KeyHintGroup, keyHintPresets } from '../core/KeyHint.js';
 import { palette } from '../../design/tokens.js';
 import { width as widthConstants } from '../../design/spacing.js';
 
+// Stable hint arrays to prevent rerenders
+const CANCEL_HINTS = [keyHintPresets.cancel];
+const DEFAULT_HINTS = [keyHintPresets.submit, keyHintPresets.tab];
+const MINIMAL_HINTS = [keyHintPresets.submit, keyHintPresets.tab, keyHintPresets.help];
+const FOOTER_HINTS = [keyHintPresets.tab, keyHintPresets.help];
+
 export interface StatusBarProps {
   /** Model name */
   modelName?: string;
@@ -39,16 +45,11 @@ export function StatusBar({
     ? width
     : widthConstants[width];
 
-  // Default left content: keyboard hints
+  // Default left content: keyboard hints (using stable array references)
   const defaultLeftContent = isProcessing ? (
-    <KeyHintGroup hints={[keyHintPresets.cancel]} />
+    <KeyHintGroup hints={CANCEL_HINTS} />
   ) : (
-    <KeyHintGroup
-      hints={[
-        keyHintPresets.submit,
-        keyHintPresets.tab,
-      ]}
-    />
+    <KeyHintGroup hints={DEFAULT_HINTS} />
   );
 
   // Default right content: model name and context
@@ -82,13 +83,7 @@ export function StatusBar({
 export function MinimalStatusBar(): React.ReactElement {
   return (
     <InkBox marginTop={1}>
-      <KeyHintGroup
-        hints={[
-          keyHintPresets.submit,
-          keyHintPresets.tab,
-          keyHintPresets.help,
-        ]}
-      />
+      <KeyHintGroup hints={MINIMAL_HINTS} />
     </InkBox>
   );
 }
@@ -112,7 +107,7 @@ export function ProcessingStatusBar({
         <Text color={palette.textTertiary}>Processing: </Text>
         <Text color={palette.textSecondary}>{operation}</Text>
       </InkBox>
-      <KeyHintGroup hints={[keyHintPresets.cancel]} />
+      <KeyHintGroup hints={CANCEL_HINTS} />
     </InkBox>
   );
 }
@@ -151,14 +146,9 @@ export function AppFooter({
       {/* Center: hints */}
       <InkBox>
         {isProcessing ? (
-          <KeyHintGroup hints={[keyHintPresets.cancel]} />
+          <KeyHintGroup hints={CANCEL_HINTS} />
         ) : (
-          <KeyHintGroup
-            hints={[
-              keyHintPresets.tab,
-              keyHintPresets.help,
-            ]}
-          />
+          <KeyHintGroup hints={FOOTER_HINTS} />
         )}
       </InkBox>
 

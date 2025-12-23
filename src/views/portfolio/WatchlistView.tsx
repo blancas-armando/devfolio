@@ -12,6 +12,7 @@ import { Panel, PanelRow, Section } from '../../components/core/Panel/index.js';
 import { palette, semantic } from '../../design/tokens.js';
 import { symbols } from '../../design/symbols.js';
 import { formatCurrency, formatPercent } from '../../utils/format.js';
+import { EmptyState, emptyStatePresets } from '../../components/feedback/EmptyState.js';
 
 export interface WatchlistViewProps {
   quotes: Quote[];
@@ -38,44 +39,20 @@ function QuoteRow({ quote }: { quote: Quote }): React.ReactElement {
   );
 }
 
-// Empty state component
-function EmptyWatchlist(): React.ReactElement {
+// Empty state component using the new EmptyState design system component
+function EmptyWatchlistView(): React.ReactElement {
   return (
     <Panel width={60} title="Watchlist">
       <PanelRow>
-        <Text color={palette.info}>Your watchlist is empty</Text>
-      </PanelRow>
-      <PanelRow><Text> </Text></PanelRow>
-      <PanelRow>
-        <Text color={palette.textTertiary}>Get started:</Text>
-      </PanelRow>
-      <PanelRow>
-        <InkBox marginLeft={2}>
-          <Text color={semantic.command}>add AAPL      </Text>
-          <Text color={palette.textTertiary}>Add Apple to your watchlist</Text>
-        </InkBox>
-      </PanelRow>
-      <PanelRow>
-        <InkBox marginLeft={2}>
-          <Text color={semantic.command}>add MSFT GOOGL</Text>
-          <Text color={palette.textTertiary}>Add multiple stocks at once</Text>
-        </InkBox>
-      </PanelRow>
-      <PanelRow><Text> </Text></PanelRow>
-      <PanelRow>
-        <Text color={palette.textTertiary}>Or explore the market:</Text>
-      </PanelRow>
-      <PanelRow>
-        <InkBox marginLeft={2}>
-          <Text color={semantic.command}>screen gainers</Text>
-          <Text color={palette.textTertiary}>See today's top gainers</Text>
-        </InkBox>
-      </PanelRow>
-      <PanelRow>
-        <InkBox marginLeft={2}>
-          <Text color={semantic.command}>b             </Text>
-          <Text color={palette.textTertiary}>Get an AI market brief</Text>
-        </InkBox>
+        <EmptyState
+          {...emptyStatePresets.watchlist()}
+          actions={[
+            { label: 'Add Apple', command: 'add AAPL', description: 'Add to watchlist', primary: true },
+            { label: 'Add multiple', command: 'add MSFT GOOGL', description: 'Add multiple stocks' },
+            { label: 'Browse', command: 'screen gainers', description: 'See top gainers' },
+            { label: 'Market brief', command: 'b', description: 'Get AI market analysis' },
+          ]}
+        />
       </PanelRow>
     </Panel>
   );
@@ -83,15 +60,31 @@ function EmptyWatchlist(): React.ReactElement {
 
 export function WatchlistView({ quotes, calendar }: WatchlistViewProps): React.ReactElement {
   if (quotes.length === 0) {
-    return <EmptyWatchlist />;
+    return <EmptyWatchlistView />;
   }
 
   const upcomingEarnings = calendar?.earnings.slice(0, 3) ?? [];
   const upcomingDividends = calendar?.dividends.slice(0, 2) ?? [];
   const hasEvents = upcomingEarnings.length > 0 || upcomingDividends.length > 0;
 
+  // Check if any quotes are from offline cache
+  const hasStaleData = quotes.some(q => q.isStale);
+  const oldestCache = quotes
+    .filter(q => q.cachedAt)
+    .map(q => q.cachedAt!)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+
   return (
     <Panel width={60} title="Watchlist">
+      {/* Offline/stale data warning */}
+      {hasStaleData && oldestCache && (
+        <PanelRow>
+          <Text color={semantic.warning}>
+            {symbols.warning} Showing cached data from {oldestCache.toLocaleString()}
+          </Text>
+        </PanelRow>
+      )}
+
       {/* Column headers */}
       <PanelRow>
         <InkBox width={10}>

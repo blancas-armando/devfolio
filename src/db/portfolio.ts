@@ -9,6 +9,22 @@ interface HoldingRow {
   cost_basis: number;
 }
 
+interface RawHoldingRow {
+  id: number;
+  symbol: string;
+  shares: number;
+  cost_basis: number;
+  added_at: string;
+}
+
+export interface RawHolding {
+  id: number;
+  symbol: string;
+  shares: number;
+  costBasis: number;
+  addedAt: Date;
+}
+
 export function getHoldings(): Holding[] {
   const db = getDb();
   const rows = db
@@ -20,6 +36,24 @@ export function getHoldings(): Holding[] {
     symbol: r.symbol,
     shares: r.shares,
     costBasis: r.cost_basis,
+  }));
+}
+
+/**
+ * Get raw holdings with timestamps for export
+ */
+export function getPortfolioRaw(): RawHolding[] {
+  const db = getDb();
+  const rows = db
+    .prepare('SELECT id, symbol, shares, cost_basis, added_at FROM holdings ORDER BY symbol')
+    .all() as RawHoldingRow[];
+
+  return rows.map((r) => ({
+    id: r.id,
+    symbol: r.symbol,
+    shares: r.shares,
+    costBasis: r.cost_basis,
+    addedAt: new Date(r.added_at),
   }));
 }
 
