@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>A Bloomberg Terminal for your command line.</strong><br/>
-  AI-powered financial analysis for developers who invest.
+  AI-powered financial analysis in a terminal-native interface.
 </p>
 
 <p align="center">
@@ -60,17 +60,11 @@
 
 ## Why I Built This
 
-I'm a developer who invests. I spend most of my day in the terminal, and switching to browser-based tools for stock research always felt like friction.
+I've worked in finance tech for most of my career. When tools like Claude Code and Gemini CLI started gaining traction, I got curious. Why does AI feel *better* in the terminal?
 
-I wanted something that:
-- Lives where I already work (the terminal)
-- Gives me real data, not toy examples
-- Uses AI to surface insights, not just display numbers
-- Feels like a professional tool, not a side project
+The only way I know how to understand something is to build it. So I picked a domain I know—financial data—and explored what an AI-native terminal experience could look like.
 
-So I built DevFolio—a terminal-native financial analysis platform that combines free real-time market data with multi-provider AI analysis.
-
-**This is not a startup or a product.** It's a personal tool I built to learn and use, now open-sourced for anyone who wants it.
+This is what I learned.
 
 ### What I Learned Building This
 
